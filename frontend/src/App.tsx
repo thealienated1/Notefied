@@ -15,6 +15,8 @@ const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
@@ -67,7 +69,6 @@ const App: React.FC = () => {
       console.log('Empty content');
       return alert('Content required');
     }
-    // Generate title from first 5 words of content
     const words = content.trim().split(/\s+/);
     const title = words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
     console.log('Adding note:', { title, content });
@@ -87,6 +88,55 @@ const App: React.FC = () => {
     }
   };
 
+  const deleteNote = async (id: number) => {
+    if (!token) return;
+    console.log('Deleting note with id:', id);
+    try {
+      await axios.delete(`https://localhost:3002/notes/${id}`, {
+        headers: { Authorization: token },
+      });
+      setNotes(notes.filter((note) => note.id !== id));
+      console.log('Note deleted:', id);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Delete note error:', axiosError.response ? axiosError.response.data : axiosError.message);
+      alert('Failed to delete note');
+    }
+  };
+
+  const startEditing = (note: Note) => {
+    setEditingNoteId(note.id);
+    setEditContent(note.content);
+  };
+
+  const saveEdit = async (id: number) => {
+    if (!token || !editContent.trim()) {
+      console.log('No token or empty edit content');
+      return alert('Content required');
+    }
+    console.log('Saving edited note:', { id, content: editContent });
+    try {
+      const response = await axios.put<Note>(
+        `https://localhost:3002/notes/${id}`,
+        { content: editContent },
+        { headers: { Authorization: token } }
+      );
+      setNotes(notes.map((note) => (note.id === id ? response.data : note)));
+      setEditingNoteId(null);
+      setEditContent('');
+      console.log('Note updated:', response.data);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Update note error:', axiosError.response ? axiosError.response.data : axiosError.message);
+      alert('Failed to update note');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingNoteId(null);
+    setEditContent('');
+  };
+
   const logout = () => {
     console.log('Logging out, clearing token');
     setToken(null);
@@ -96,7 +146,7 @@ const App: React.FC = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h1>Notefied App</h1>
+      <h1>Notes App</h1>
       {!token ? (
         <div>
           <input
@@ -135,8 +185,32 @@ const App: React.FC = () => {
           <ul>
             {notes.map((note) => (
               <li key={note.id}>
-                <strong>{note.title}</strong>: {note.content}{' '}
-                <em>({new Date(note.updated_at).toLocaleString()})</em>
+                {editingNoteId === note.id ? (
+                  <>
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      style={{ margin: '5px', padding: '5px', width: '300px', height: '100px' }}
+                    />
+                    <button onClick={() => saveEdit(note.id)} style={{ margin: '5px', padding: '5px' }}>
+                      Save
+                    </button>
+                    <button onClick={cancelEdit} style={{ margin: '5px', padding: '5px' }}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <strong>{note.title}</strong>: {note.content}{' '}
+                    <em>({new Date(note.updated_at).toLocaleString()})</em>
+                    <button onClick={() => startEditing(note)} style={{ margin: '5px', padding: '5px' }}>
+                      Edit
+                    </button>
+                    <button onClick={() => deleteNote(note.id)} style={{ margin: '5px', padding: '5px' }}>
+                      Delete
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
