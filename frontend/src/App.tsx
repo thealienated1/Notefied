@@ -33,7 +33,7 @@ const App: React.FC = () => {
       const response = await axios.get<Note[]>('https://localhost:3002/notes', {
         headers: { Authorization: authToken },
       });
-      console.log('Notes fetched:', response.data);
+      console.log('Raw fetched notes:', response.data);
       setNotes(response.data);
     } catch (error) {
       const axiosError = error as AxiosError;
@@ -71,14 +71,16 @@ const App: React.FC = () => {
     }
     const words = content.trim().split(/\s+/);
     const title = words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
-    console.log('Adding note:', { title, content });
+    console.log('Step 1 - Raw input content:', content);
+    console.log('Step 2 - Generated title:', title);
+    console.log('Step 3 - Data to send:', JSON.stringify({ title, content }));
     try {
       const response = await axios.post<Note>(
         'https://localhost:3002/notes',
         { title, content },
         { headers: { Authorization: token } }
       );
-      console.log('Note added:', response.data);
+      console.log('Step 4 - Raw server response:', response.data);
       setNotes([response.data, ...notes]);
       setContent('');
     } catch (error) {
@@ -145,77 +147,119 @@ const App: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Notes App</h1>
-      {!token ? (
-        <div>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Username"
-            style={{ margin: '5px', padding: '5px' }}
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            style={{ margin: '5px', padding: '5px' }}
-          />
-          <button onClick={login} style={{ margin: '5px', padding: '5px' }}>
-            Login
-          </button>
-        </div>
-      ) : (
-        <>
-          <button onClick={logout} style={{ margin: '5px', padding: '5px', float: 'right' }}>
-            Logout
-          </button>
-          <div>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Start typing your note..."
-              style={{ margin: '5px', padding: '5px', width: '300px', height: '100px' }}
+    <div className="min-h-screen bg-gradient-to-r from-[#141414] to-[#1D1D1D] p-5 flex justify-center">
+      <div className="w-full max-w-md">
+        <h1 className="text-2xl font-bold text-gray-100 mb-5">Notes App</h1>
+        {!token ? (
+          <div className="space-y-3">
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button onClick={addNote} style={{ margin: '5px', padding: '5px' }}>
-              Add Note
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={login}
+              className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+            >
+              Login
             </button>
           </div>
-          <ul>
-            {notes.map((note) => (
-              <li key={note.id}>
-                {editingNoteId === note.id ? (
-                  <>
-                    <textarea
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      style={{ margin: '5px', padding: '5px', width: '300px', height: '100px' }}
-                    />
-                    <button onClick={() => saveEdit(note.id)} style={{ margin: '5px', padding: '5px' }}>
-                      Save
-                    </button>
-                    <button onClick={cancelEdit} style={{ margin: '5px', padding: '5px' }}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <strong>{note.title}</strong>: {note.content}{' '}
-                    <em>({new Date(note.updated_at).toLocaleString()})</em>
-                    <button onClick={() => startEditing(note)} style={{ margin: '5px', padding: '5px' }}>
-                      Edit
-                    </button>
-                    <button onClick={() => deleteNote(note.id)} style={{ margin: '5px', padding: '5px' }}>
-                      Delete
-                    </button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+        ) : (
+          <>
+            <button
+              onClick={logout}
+              className="float-right bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 transition"
+            >
+              Logout
+            </button>
+            <div className="space-y-3 mt-10">
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Start typing your note..."
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={4}
+              />
+              <button
+                onClick={addNote}
+                className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+              >
+                Add Note
+              </button>
+            </div>
+            <ul className="mt-5 space-y-3">
+              {notes.map((note) => {
+                console.log('Step 5 - Rendering note:', note);
+                return (
+                  <li
+                    key={note.id}
+                    className="bg-white p-3 rounded shadow flex justify-between items-start"
+                  >
+                    {editingNoteId === note.id ? (
+                      <div className="w-full space-y-2">
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                          rows={4}
+                        />
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => saveEdit(note.id)}
+                            className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700 transition"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          {note.title !== note.content && (
+                            <strong className="text-gray-800">{note.title}</strong>
+                          )}
+                          <p className="text-gray-600">{note.content}</p>
+                          <em className="text-sm text-gray-400">
+                            {new Date(note.updated_at).toLocaleString()}
+                          </em>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => startEditing(note)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteNote(note.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
     </div>
   );
 };

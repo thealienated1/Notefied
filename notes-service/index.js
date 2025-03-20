@@ -37,8 +37,8 @@ const authMiddleware = (req, res, next) => {
 };
 
 app.post('/notes', authMiddleware, [
-  body('title').isLength({ min: 1 }).trim().escape(),
-  body('content').isLength({ min: 1 }).trim().escape(),
+  body('title').isLength({ min: 1 }).trim(), // Removed .escape()
+  body('content').isLength({ min: 1 }).trim(), // Removed .escape()
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -66,7 +66,6 @@ app.get('/notes', authMiddleware, async (req, res) => {
   }
 });
 
-// New DELETE endpoint
 app.delete('/notes/:id', authMiddleware, async (req, res) => {
   const noteId = req.params.id;
   try {
@@ -84,9 +83,8 @@ app.delete('/notes/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// New PUT endpoint
 app.put('/notes/:id', authMiddleware, [
-  body('content').isLength({ min: 1 }).trim().escape(),
+  body('content').isLength({ min: 1 }).trim(), // Removed .escape()
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
