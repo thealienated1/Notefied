@@ -190,7 +190,7 @@ const App: React.FC = () => {
                   {notes.map((note) => (
                     <div
                       key={note.id}
-                      className="relative w-full h-[100px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-lg mb-2 cursor-pointer"
+                      className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-lg mb-2 cursor-pointer"
                       onClick={(e) => { e.stopPropagation(); setSelectedNoteId(note.id); setNewContent(note.content); }}
                       onContextMenu={(e) => { e.preventDefault(); setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY }); }}
                     >
@@ -216,16 +216,16 @@ const App: React.FC = () => {
               </div>
             </div>
             {/* Center Section */}
-            <div className="w-[1200px] h-[800px] p-4">
+            <div className="w-[1100px] h-[800px] p-4">
               <textarea
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
                 placeholder="Start typing your note..."
-                className="w-full h-[700px] p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded text-white rounded-[15px]"
+                className="w-full h-[700px] p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded text-white rounded-[15px] focus:border-[#5062E7] focus:outline-none resize-none"
               />
             </div>
             {/* Right Section */}
-            <div className="w-[200px] h-[750px] bg-gradient-to-b from-[#191919] to-[#141414] p-2">
+            <div className="w-[240px] h-[750px] bg-gradient-to-b from-[#191919] to-[#141414] p-2">
               <div className="w-full h-[100px] border border-gray-300"></div>
             </div>
           </div>
