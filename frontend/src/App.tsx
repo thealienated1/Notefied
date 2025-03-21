@@ -216,10 +216,10 @@ const App: React.FC = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none focus:ring-2 focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
                 />
-                <div className="h-[40px] w-full flex mt-[15px]">
-                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] hover:bg-[#383838]">All</button>
-                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[35px] hover:bg-[#383838]">Groups</button>
-                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[35px] hover:bg-[#383838]">Projects</button>
+                <div className="h-[40px] w-full flex mt-[15px] flex justify-center items-center">
+                  <button className="w-[70px] h-[35px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] hover:bg-[#383838]">All</button>
+                  <button className="w-[70px] h-[35px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[30px] hover:bg-[#383838]">Groups</button>
+                  <button className="w-[70px] h-[35px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[30px] hover:bg-[#383838]">Projects</button>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar mt-[15px] mb-[60px]">
                   {filteredNotes.map((note) => (
