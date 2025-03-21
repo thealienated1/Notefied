@@ -193,17 +193,17 @@ const App: React.FC = () => {
         `}
       </style>
       <header className="h-[30px] bg-transparent text-white p-4 flex justify-between items-center flex-shrink-0">
-        <h1 className="text-2xl font-bold">Notefied</h1>
+        <h1 className="text-xl font-bold">Notefied</h1>
         {token && (
           <button
             onClick={logout}
-            className="w-[100px] h-[30px] bg-red-600 rounded hover:bg-red-700 flex items-center justify-center mt-[5px]"
+            className="w-[60px] h-[30px] bg-transparent rounded hover:text-red-400 flex items-center justify-center mt-[5px]"
           >
             Logout
           </button>
         )}
       </header>
-      <div className="flex-1 flex justify-center px-4 overflow-hidden">
+      <div className={`flex-1 flex justify-center items-center px-4 overflow-hidden ${token ? '' : 'bg-gradient-to-br from-[#0D0D0D] to-[#191919]'}`}>
         {token ? (
           <div className="flex w-full max-w-[1640px] h-full">
             {/* Left Section */}
@@ -217,9 +217,9 @@ const App: React.FC = () => {
                   className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none focus:ring-2 focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
                 />
                 <div className="h-[40px] w-full flex mt-[15px]">
-                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[14px] font-medium rounded-[20px] hover:bg-[#383838]">All</button>
-                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[14px] font-medium rounded-[20px] ml-[35px] hover:bg-[#383838]">Groups</button>
-                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[14px] font-medium rounded-[20px] ml-[35px] hover:bg-[#383838]">Projects</button>
+                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] hover:bg-[#383838]">All</button>
+                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[35px] hover:bg-[#383838]">Groups</button>
+                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[35px] hover:bg-[#383838]">Projects</button>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar mt-[15px] mb-[60px]">
                   {filteredNotes.map((note) => (
@@ -286,22 +286,42 @@ const App: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="w-[400px] bg-gray-800 p-6 rounded shadow-lg">
-            <h2 className="text-xl font-bold mb-4 text-white">Login</h2>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Username"
-              className="w-full p-2 bg-gray-700 border border-gray-600 rounded mb-2 text-white placeholder-gray-400"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full p-2 bg-gray-700 border border-gray-600 rounded mb-4 text-white placeholder-gray-400"
-            />
-            <button onClick={login} className="w-full bg-purple-600 text-white p-2 rounded hover:bg-purple-700">Login</button>
+          <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] flex justify-center items-center">
+            <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-lg p-6 flex flex-col">
+              <h2 className="text-2xl font-medium text-white mb-6 text-center">Login</h2>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Username"
+                className="w-full p-2 bg-[#121212] font-thin rounded-[20px] text-white placeholder-gray-400 placeholder:text-sm mb-7 text-base focus:outline-none focus:bg-[#121212]"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full p-2 bg-[#121212] font-thin rounded-[20px] text-white placeholder-gray-400 placeholder:text-sm mb-7 text-base focus:outline-none focus:bg-[#121212]"
+              />
+              <div className="text-center text-sm text-gray-400 mb-4">Forgot password?</div>
+              <div className="flex justify-center mb-6">
+                <button
+                  onClick={login}
+                  className="w-[100px] h-[30px] bg-[#0072DB] text-white rounded-[30px] hover:bg-blue-700 text-xs mt-2"
+                >
+                  Sign In
+                </button>
+              </div>
+              <div className="text-center text-sm text-gray-400 mb-5">
+                Don’t have an account?{' '}
+                <span className="text-purple-400 cursor-pointer">Sign-up</span>
+              </div>
+              <div className="text-center text-sm text-gray-400 mb-6">or</div>
+              <div className="flex justify-center space-x-5">
+                <button className="w-10 h-10 rounded-full border border-gray-600"></button>
+                <button className="w-10 h-10 rounded-full border border-gray-600"></button>
+                <button className="w-10 h-10 rounded-full border border-gray-600"></button>
+              </div>
+            </div>
           </div>
         )}
       </div>
