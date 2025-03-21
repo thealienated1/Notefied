@@ -15,7 +15,7 @@ const App: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [newContent, setNewContent] = useState('');
-  const [originalContent, setOriginalContent] = useState<string>(''); // New state for original content
+  const [originalContent, setOriginalContent] = useState<string>('');
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +41,7 @@ const App: React.FC = () => {
       selectedNoteId !== null &&
       newContent.trim() &&
       token &&
-      newContent !== originalContent // Only trigger if content has changed
+      newContent !== originalContent
     ) {
       console.log('Autosave triggered for note:', selectedNoteId, 'Content:', newContent);
       const timer = setTimeout(() => {
@@ -98,7 +98,7 @@ const App: React.FC = () => {
       );
       setNotes(updatedNotes);
       setSelectedNoteId(response.data.id);
-      setOriginalContent(newContent); // Set original content for the new note
+      setOriginalContent(newContent);
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Add note error:', axiosError.response?.data || axiosError.message);
@@ -118,7 +118,7 @@ const App: React.FC = () => {
       if (selectedNoteId === id) {
         setSelectedNoteId(null);
         setNewContent('');
-        setOriginalContent(''); // Reset original content
+        setOriginalContent('');
       }
     } catch (error) {
       const axiosError = error as AxiosError;
@@ -143,7 +143,7 @@ const App: React.FC = () => {
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
       setNotes(updatedNotes);
-      setOriginalContent(newContent); // Update original content after save
+      setOriginalContent(newContent);
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Update note error:', axiosError.response?.data || axiosError.message);
@@ -156,7 +156,7 @@ const App: React.FC = () => {
     setNotes([]);
     setSelectedNoteId(null);
     setNewContent('');
-    setOriginalContent(''); // Reset original content
+    setOriginalContent('');
     setSearchQuery('');
   };
 
@@ -225,19 +225,26 @@ const App: React.FC = () => {
                   {filteredNotes.map((note) => (
                     <div
                       key={note.id}
-                      className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-lg mb-2 cursor-pointer hover:bg-[#383838]"
+                      className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-lg mb-2 cursor-pointer hover:bg-[#383838] transition-all duration-300"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedNoteId(note.id);
                         setNewContent(note.content);
-                        setOriginalContent(note.content); // Set original content when selecting a note
+                        setOriginalContent(note.content);
                       }}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY });
                       }}
                     >
-                      <div>
+                      <div
+                        className={`absolute left-1 top-[12px] h-[96px] bg-gradient-to-b from-[#2996FC] via-[#1238D4] to-[#592BFF] ${
+                          note.id === selectedNoteId ? 'w-[4px]' : 'w-0'
+                        } transition-all duration-300 rounded-[4px]`}
+                      ></div>
+                      <div
+                        className={`transition-all duration-300 ${note.id === selectedNoteId ? 'ml-[7px]' : 'ml-0'}`}
+                      >
                         <strong className="text-white">{note.title}</strong>
                         <p className="text-gray-400 truncate">{note.content}</p>
                       </div>
@@ -255,7 +262,7 @@ const App: React.FC = () => {
                     onClick={() => {
                       setSelectedNoteId(null);
                       setNewContent('');
-                      setOriginalContent(''); // Reset original content for new note
+                      setOriginalContent('');
                     }}
                     className="w-[40px] h-[40px] bg-transparent text-white rounded-full flex items-center justify-center hover:bg-[#383838]"
                   >
@@ -310,7 +317,7 @@ const App: React.FC = () => {
               if (note) {
                 setSelectedNoteId(note.id);
                 setNewContent(note.content);
-                setOriginalContent(note.content); // Set original content for context menu edit
+                setOriginalContent(note.content);
               }
               setContextMenu(null);
             }}
