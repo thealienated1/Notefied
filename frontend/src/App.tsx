@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios, { AxiosError } from 'axios';
-import TrashIcon from './assets/icons/trash.svg'; // Import as image
-import PlusIcon from './assets/icons/plus.svg';   // Import as image
+import TrashIcon from './assets/icons/trash.svg';
+import PlusIcon from './assets/icons/plus.svg';
 
 interface Note {
   id: number;
@@ -15,11 +15,12 @@ const App: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [newContent, setNewContent] = useState('');
+  const [originalContent, setOriginalContent] = useState<string>(''); // New state for original content
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number } | null>(null);
-  const [searchQuery, setSearchQuery] = useState(''); // For search functionality
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
@@ -29,29 +30,32 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Auto-save for new notes (runs once when content is first entered)
   useEffect(() => {
     if (selectedNoteId === null && newContent.trim() && token) {
       addNote();
     }
   }, [newContent, token]);
 
-  // Auto-save for editing existing notes (2-second debounce)
   useEffect(() => {
-    if (selectedNoteId !== null && newContent.trim() && token) {
+    if (
+      selectedNoteId !== null &&
+      newContent.trim() &&
+      token &&
+      newContent !== originalContent // Only trigger if content has changed
+    ) {
+      console.log('Autosave triggered for note:', selectedNoteId, 'Content:', newContent);
       const timer = setTimeout(() => {
         saveEdit();
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [newContent, selectedNoteId, token]);
+  }, [newContent, selectedNoteId, token, originalContent]);
 
   const fetchNotes = async (authToken: string) => {
     try {
       const response = await axios.get<Note[]>('https://localhost:3002/notes', {
         headers: { Authorization: authToken },
       });
-      // Sort notes by updated_at in descending order
       const sortedNotes = response.data.sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
@@ -89,12 +93,12 @@ const App: React.FC = () => {
         { title, content: newContent },
         { headers: { Authorization: token } }
       );
-      // Add new note and sort by updated_at
       const updatedNotes = [response.data, ...notes].sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
       setNotes(updatedNotes);
       setSelectedNoteId(response.data.id);
+      setOriginalContent(newContent); // Set original content for the new note
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Add note error:', axiosError.response?.data || axiosError.message);
@@ -107,7 +111,6 @@ const App: React.FC = () => {
       await axios.delete(`https://localhost:3002/notes/${id}`, {
         headers: { Authorization: token },
       });
-      // Remove note and maintain sorted order
       const updatedNotes = notes.filter((note) => note.id !== id).sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
@@ -115,6 +118,7 @@ const App: React.FC = () => {
       if (selectedNoteId === id) {
         setSelectedNoteId(null);
         setNewContent('');
+        setOriginalContent(''); // Reset original content
       }
     } catch (error) {
       const axiosError = error as AxiosError;
@@ -125,19 +129,21 @@ const App: React.FC = () => {
 
   const saveEdit = async () => {
     if (!token || !newContent.trim() || selectedNoteId === null) return;
+    console.log('Saving edit for note:', selectedNoteId, 'New content:', newContent);
     try {
       const response = await axios.put<Note>(
         `https://localhost:3002/notes/${selectedNoteId}`,
         { content: newContent },
         { headers: { Authorization: token } }
       );
-      // Update note and sort by updated_at
+      console.log('Update successful:', response.data);
       const updatedNotes = notes.map((note) =>
         note.id === selectedNoteId ? response.data : note
       ).sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
       setNotes(updatedNotes);
+      setOriginalContent(newContent); // Update original content after save
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Update note error:', axiosError.response?.data || axiosError.message);
@@ -150,10 +156,10 @@ const App: React.FC = () => {
     setNotes([]);
     setSelectedNoteId(null);
     setNewContent('');
+    setOriginalContent(''); // Reset original content
     setSearchQuery('');
   };
 
-  // Filter and sort notes based on search query
   const filteredNotes = notes
     .filter(
       (note) =>
@@ -163,7 +169,7 @@ const App: React.FC = () => {
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#141414] to-[#1D1D1D] font-inter" onClick={() => setContextMenu(null)}>
+    <div className="h-screen bg-gradient-to-br from-[#141414] to-[#1D1D1D] font-inter flex flex-col" onClick={() => setContextMenu(null)}>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" />
       <style>
         {`
@@ -186,40 +192,36 @@ const App: React.FC = () => {
           }
         `}
       </style>
-      <header className="h-[30px] bg-transparent text-white p-4 flex justify-between items-center">
+      <header className="h-[30px] bg-transparent text-white p-4 flex justify-between items-center flex-shrink-0">
         <h1 className="text-2xl font-bold">Notefied</h1>
         {token && (
           <button
             onClick={logout}
-            className="w-[100px] h-[30px] bg-red-600 rounded hover:bg-red-700 flex items-center justify-center"
+            className="w-[100px] h-[30px] bg-red-600 rounded hover:bg-red-700 flex items-center justify-center mt-[5px]"
           >
             Logout
           </button>
         )}
       </header>
-      <div className="flex justify-center mt-4">
+      <div className="flex-1 flex justify-center px-4 overflow-hidden">
         {token ? (
-          <div className="flex w-[1640px]">
+          <div className="flex w-full max-w-[1640px] h-full">
             {/* Left Section */}
-            <div className="w-[300px] h-[780px] flex flex-col">
-              {/* Container for Widget 1, Widget 2, and Note Tiles */}
-              <div className="flex-grow relative">
-                {/* Widget 2: Search Notes Input */}
+            <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
+              <div className="flex flex-col h-full relative">
                 <input
                   type="text"
                   placeholder="Search Notes"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-[40px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none focus:ring-2 focus:ring-[#5062E7] placeholder-gray-400"
+                  className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none focus:ring-2 focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
                 />
-                {/* Widget 1: Three Buttons */}
-                <div className="h-[30px] flex mt-[15px]">
-                  <button className="w-[80px] h-[30px] bg-[#1F1F1F] text-white rounded-[15px] hover:bg-[#383838]">All</button>
-                  <button className="w-[80px] h-[30px] bg-[#1F1F1F] text-white rounded-[15px] ml-[35px] hover:bg-[#383838]">Groups</button>
-                  <button className="w-[80px] h-[30px] bg-[#1F1F1F] text-white rounded-[15px] ml-[35px] hover:bg-[#383838]">Projects</button>
+                <div className="h-[40px] w-full flex mt-[15px]">
+                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[14px] font-medium rounded-[20px] hover:bg-[#383838]">All</button>
+                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[14px] font-medium rounded-[20px] ml-[35px] hover:bg-[#383838]">Groups</button>
+                  <button className="w-[70px] h-[40px] bg-[#1F1F1F] text-white text-[14px] font-medium rounded-[20px] ml-[35px] hover:bg-[#383838]">Projects</button>
                 </div>
-                {/* Scrollable Note Tiles */}
-                <div className="h-[640px] overflow-y-auto custom-scrollbar mt-[15px]">
+                <div className="flex-1 overflow-y-auto custom-scrollbar mt-[15px] mb-[60px]">
                   {filteredNotes.map((note) => (
                     <div
                       key={note.id}
@@ -228,6 +230,7 @@ const App: React.FC = () => {
                         e.stopPropagation();
                         setSelectedNoteId(note.id);
                         setNewContent(note.content);
+                        setOriginalContent(note.content); // Set original content when selecting a note
                       }}
                       onContextMenu={(e) => {
                         e.preventDefault();
@@ -244,15 +247,15 @@ const App: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                {/* Buttons Container */}
-                <div className="absolute bottom-0 right-4 flex space-x-6">
-                  <button className="w-[40px] h-[40px] bg-transparent text-white rounded-full flex items-center justify-center hover:bg-[#383838]">
+                <div className="absolute bottom-0 left-0 w-full flex justify-end pr-4 pb-4">
+                  <button className="w-[40px] h-[40px] bg-transparent text-white rounded-full flex items-center justify-center hover:bg-[#383838] mr-6">
                     <img src={TrashIcon} alt="Trash" className="w-7 h-7" />
                   </button>
                   <button
                     onClick={() => {
                       setSelectedNoteId(null);
                       setNewContent('');
+                      setOriginalContent(''); // Reset original content for new note
                     }}
                     className="w-[40px] h-[40px] bg-transparent text-white rounded-full flex items-center justify-center hover:bg-[#383838]"
                   >
@@ -262,17 +265,17 @@ const App: React.FC = () => {
               </div>
             </div>
             {/* Center Section */}
-            <div className="w-[1100px] h-[800px] p-4">
+            <div className="flex-1 p-4 mt-[45px] ml-[0px]">
               <textarea
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
                 placeholder="Start typing your note..."
-                className="w-full h-[700px] p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded text-white rounded-[15px] focus:border-[#5062E7] focus:outline-none resize-none"
+                className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
               />
             </div>
             {/* Right Section */}
-            <div className="w-[240px] h-[750px] bg-gradient-to-b from-[#191919] to-[#141414] p-2">
-              <div className="w-full h-[100px] border border-gray-300"></div>
+            <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
+              <div className="w-full h-[40px] border border-gray-300"></div>
             </div>
           </div>
         ) : (
@@ -295,7 +298,6 @@ const App: React.FC = () => {
           </div>
         )}
       </div>
-      {/* Context Menu */}
       {contextMenu && (
         <div
           className="absolute bg-gray-800 text-white shadow-lg rounded p-2"
@@ -304,8 +306,12 @@ const App: React.FC = () => {
         >
           <button
             onClick={() => {
-              setSelectedNoteId(contextMenu.noteId);
-              setNewContent(notes.find((n) => n.id === contextMenu.noteId)?.content || '');
+              const note = notes.find((n) => n.id === contextMenu.noteId);
+              if (note) {
+                setSelectedNoteId(note.id);
+                setNewContent(note.content);
+                setOriginalContent(note.content); // Set original content for context menu edit
+              }
               setContextMenu(null);
             }}
             className="block w-full text-left px-2 py-1 hover:bg-gray-700"
