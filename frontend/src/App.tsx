@@ -3,6 +3,7 @@ import axios, { AxiosError } from 'axios';
 import TrashIcon from './assets/icons/trash.svg';
 import PlusIcon from './assets/icons/plus.svg';
 
+// Interfaces for TypeScript type definitions
 interface Note {
   id: number;
   user_id: number;
@@ -15,20 +16,24 @@ interface ErrorResponse {
   error?: string;
 }
 
+// Main App component
 const App: React.FC = () => {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
-  const [newContent, setNewContent] = useState('');
-  const [originalContent, setOriginalContent] = useState<string>('');
-  const [token, setToken] = useState<string | null>(null);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number } | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  // State declarations
+  const [notes, setNotes] = useState<Note[]>([]); // List of all notes
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null); // ID of the currently selected note
+  const [newContent, setNewContent] = useState(''); // Content of the note being edited or created
+  const [originalContent, setOriginalContent] = useState<string>(''); // Original content for comparison in autosave
+  const [token, setToken] = useState<string | null>(null); // Authentication token
+  const [username, setUsername] = useState(''); // Username for login/register
+  const [password, setPassword] = useState(''); // Password for login/register
+  const [confirmPassword, setConfirmPassword] = useState(''); // Confirm password for registration
+  const [isRegistering, setIsRegistering] = useState(false); // Toggle between login and register forms
+  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number } | null>(null); // Context menu state for right-click actions
+  const [searchQuery, setSearchQuery] = useState(''); // Search query for filtering notes
 
-  // Move functions above useEffect hooks
+  // --- Functions (API calls and logic) ---
+
+  // Fetch all notes for the authenticated user
   const fetchNotes = async (authToken: string) => {
     try {
       const response = await axios.get<Note[]>('https://localhost:3002/notes', {
@@ -44,6 +49,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle user login
   const login = async () => {
     try {
       const response = await axios.post<{ token: string }>(
@@ -61,6 +67,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle user registration
   const register = async () => {
     if (password !== confirmPassword) {
       alert('Passwords do not match');
@@ -86,6 +93,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Add a new note
   const addNote = async () => {
     if (!token || !newContent.trim()) return;
     const words = newContent.trim().split(/\s+/);
@@ -109,6 +117,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Delete a note
   const deleteNote = async (id: number) => {
     if (!token) return;
     try {
@@ -131,6 +140,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Save edits to an existing note
   const saveEdit = async () => {
     if (!token || !newContent.trim() || selectedNoteId === null) return;
     console.log('saveEdit called for note:', selectedNoteId, 'New content:', newContent);
@@ -154,6 +164,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Logout user and clear state
   const logout = () => {
     setToken(null);
     localStorage.removeItem('token');
@@ -164,7 +175,9 @@ const App: React.FC = () => {
     setSearchQuery('');
   };
 
-  // useEffect hooks after function declarations
+  // --- useEffect Hooks ---
+
+  // Check for stored token on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
@@ -173,12 +186,14 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Auto-add note when typing in an empty textarea
   useEffect(() => {
     if (selectedNoteId === null && newContent.trim() && token) {
       addNote();
     }
   }, [newContent, token]);
 
+  // Autosave edits after 2 seconds of inactivity
   useEffect(() => {
     if (selectedNoteId !== null && newContent.trim() && token && newContent !== originalContent) {
       console.log('Content changed, scheduling autosave for note:', selectedNoteId, 'Content:', newContent);
@@ -193,6 +208,7 @@ const App: React.FC = () => {
     }
   }, [newContent, selectedNoteId, token, originalContent, saveEdit]);
 
+  // Filter notes based on search query
   const filteredNotes = notes
     .filter(
       (note) =>
@@ -201,9 +217,15 @@ const App: React.FC = () => {
     )
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
+  // --- UI Rendering ---
+
   return (
+    // Main container with gradient background and full height
     <div className="h-screen bg-gradient-to-br from-[#141414] to-[#1D1D1D] font-inter flex flex-col" onClick={() => setContextMenu(null)}>
+      {/* Google Fonts import for Inter */}
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" />
+      
+      {/* Custom scrollbar CSS */}
       <style>
         {`
           .custom-scrollbar::-webkit-scrollbar {
@@ -225,6 +247,8 @@ const App: React.FC = () => {
           }
         `}
       </style>
+
+      {/* Header with title and logout button */}
       <header className="h-[30px] bg-transparent text-white p-4 flex justify-between items-center flex-shrink-0">
         <h1 className="text-xl font-bold">Notefied</h1>
         {token && (
@@ -236,28 +260,44 @@ const App: React.FC = () => {
           </button>
         )}
       </header>
+
+      {/* Main content area */}
       <div className={`flex-1 flex justify-center items-center px-4 overflow-hidden ${token ? '' : 'bg-gradient-to-br from-[#0D0D0D] to-[#191919]'}`}>
         {token ? (
+          // Logged-in view: Notes interface
           <div className="flex w-full max-w-[1640px] h-full">
+            {/* Left sidebar: Note list and controls */}
             <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
               <div className="flex flex-col h-full relative">
+                {/* Search input */}
                 <input
                   type="text"
                   placeholder="Search Notes"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none focus:ring-2 focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
+                  className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
                 />
-                <div className="h-[40px] w-full flex mt-[15px] flex justify-center items-center">
-                  <button className="w-[70px] h-[35px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] hover:bg-[#383838]">All</button>
-                  <button className="w-[70px] h-[35px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[30px] hover:bg-[#383838]">Groups</button>
-                  <button className="w-[70px] h-[35px] bg-[#1F1F1F] text-white text-[12px] font-normal rounded-[20px] ml-[30px] hover:bg-[#383838]">Projects</button>
+
+                {/* Tab buttons: All, Groups, Projects */}
+                <div className="h-[45px] w-full flex mt-[10px] flex justify-center items-center">
+                  <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] hover:bg-[#383838]">
+                    All
+                  </button>
+                  <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] ml-[30px] hover:bg-[#383838]">
+                    Groups
+                  </button>
+                  <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] ml-[30px] hover:bg-[#383838]">
+                    Projects
+                  </button>
                 </div>
-                <div className="flex-1 overflow-y-auto custom-scrollbar mt-[15px] mb-[60px]">
+
+                {/* Note list with scrollbar */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar mt-[10px] mb-[60px]">
                   {filteredNotes.map((note) => (
+                    // Individual note card
                     <div
                       key={note.id}
-                      className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-lg mb-2 cursor-pointer hover:bg-[#383838] transition-all duration-300"
+                      className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] mb-3 cursor-pointer hover:bg-[#383838] transition-all duration-300"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedNoteId(note.id);
@@ -269,25 +309,30 @@ const App: React.FC = () => {
                         setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY });
                       }}
                     >
+                      {/* Selection indicator bar */}
                       <div
                         className={`absolute left-1 top-[12px] h-[96px] bg-gradient-to-b from-[#2996FC] via-[#1238D4] to-[#592BFF] ${
                           note.id === selectedNoteId ? 'w-[4px]' : 'w-0'
                         } transition-all duration-300 rounded-[4px]`}
                       ></div>
+                      {/* Note title and content */}
                       <div
                         className={`transition-all duration-300 ${note.id === selectedNoteId ? 'ml-[7px]' : 'ml-0'}`}
                       >
                         <strong className="text-white">{note.title}</strong>
                         <p className="text-gray-400">{note.content}</p>
                       </div>
+                      {/* Timestamp */}
                       <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
                         {new Date(note.updated_at).toLocaleString()}
                       </span>
                     </div>
                   ))}
                 </div>
-                <div className="absolute bottom-0 left-0 w-full flex justify-end pr-4 pb-4">
-                  <button className="w-[40px] h-[40px] bg-transparent text-white rounded-full flex items-center justify-center hover:bg-[#383838] mr-6">
+
+                {/* Bottom action buttons: Trash and Add */}
+                <div className="absolute bottom-[-3px] left-0 w-full flex justify-end pr-4 pb-4">
+                  <button className="w-[40px] h-[40px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838] mr-6">
                     <img src={TrashIcon} alt="Trash" className="w-7 h-7" />
                   </button>
                   <button
@@ -296,13 +341,15 @@ const App: React.FC = () => {
                       setNewContent('');
                       setOriginalContent('');
                     }}
-                    className="w-[40px] h-[40px] bg-transparent text-white rounded-full flex items-center justify-center hover:bg-[#383838]"
+                    className="w-[40px] h-[40px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838]"
                   >
                     <img src={PlusIcon} alt="Add" className="w-7 h-7" />
                   </button>
                 </div>
               </div>
             </div>
+
+            {/* Middle section: Textarea for note editing */}
             <div className="flex-1 p-4 mt-[45px] ml-[0px]">
               <textarea
                 value={newContent}
@@ -311,22 +358,28 @@ const App: React.FC = () => {
                 className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
               />
             </div>
+
+            {/* Right sidebar: Placeholder for future content */}
             <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
               <div className="w-full h-[40px] border border-gray-300"></div>
             </div>
           </div>
         ) : (
+          // Logged-out view: Login/Register form
           <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] flex justify-center items-center">
             <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-lg p-6 flex flex-col">
+              {/* Form title */}
               <h2 className="text-2xl font-medium text-white mb-6 text-center">
                 {isRegistering ? 'Sign-up' : 'Sign-in'}
               </h2>
+              {/* Username input */}
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
                 className="w-full p-2 bg-[#121212] font-thin rounded-[20px] text-white placeholder-gray-400 placeholder:text-sm mb-7 text-base focus:outline-none focus:bg-[#121212]"
               />
+              {/* Password input */}
               <input
                 type="password"
                 value={password}
@@ -334,6 +387,7 @@ const App: React.FC = () => {
                 placeholder="Password"
                 className="w-full p-2 bg-[#121212] font-thin rounded-[20px] text-white placeholder-gray-400 placeholder:text-sm mb-7 text-base focus:outline-none focus:bg-[#121212]"
               />
+              {/* Confirm password input (only for registration) */}
               {isRegistering && (
                 <input
                   type="password"
@@ -343,9 +397,11 @@ const App: React.FC = () => {
                   className="w-full p-2 bg-[#121212] font-thin rounded-[20px] text-white placeholder-gray-400 placeholder:text-sm mb-7 text-base focus:outline-none focus:bg-[#121212]"
                 />
               )}
+              {/* Forgot password link (only for login) */}
               {!isRegistering && (
                 <div className="text-center text-sm text-gray-400 mb-4">Forgot password?</div>
               )}
+              {/* Submit button */}
               <div className="flex justify-center mb-6">
                 <button
                   onClick={isRegistering ? register : login}
@@ -354,6 +410,7 @@ const App: React.FC = () => {
                   {isRegistering ? 'Sign Up' : 'Sign In'}
                 </button>
               </div>
+              {/* Toggle between login and register */}
               <div className="text-center text-sm text-gray-400 mb-5">
                 {isRegistering ? (
                   <>
@@ -371,7 +428,9 @@ const App: React.FC = () => {
                   </>
                 )}
               </div>
+              {/* Separator */}
               <div className="text-center text-sm text-gray-400 mb-6">or</div>
+              {/* Social login placeholders */}
               <div className="flex justify-center space-x-5">
                 <button className="w-10 h-10 rounded-full border border-gray-600"></button>
                 <button className="w-10 h-10 rounded-full border border-gray-600"></button>
@@ -381,12 +440,15 @@ const App: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Context menu for note actions */}
       {contextMenu && (
         <div
           className="absolute bg-gray-800 text-white shadow-lg rounded p-2"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Edit option */}
           <button
             onClick={() => {
               const note = notes.find((n) => n.id === contextMenu.noteId);
@@ -401,6 +463,7 @@ const App: React.FC = () => {
           >
             Edit
           </button>
+          {/* Delete option */}
           <button
             onClick={() => {
               deleteNote(contextMenu.noteId);
