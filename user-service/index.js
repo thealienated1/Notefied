@@ -25,17 +25,16 @@ pool.connect((err) => {
   else console.log('Connected to database successfully');
 });
 
+// Registration Endpoint
 app.post('/register', [
   body('username').isLength({ min: 3 }).trim().escape(),
   body('password').isLength({ min: 6 }),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    console.log('Registration validation errors:', errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
   const { username, password } = req.body;
-  console.log('Registration attempt:', { username });
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
@@ -49,27 +48,23 @@ app.post('/register', [
   }
 });
 
+// Login Endpoint
 app.post('/login', [
   body('username').isLength({ min: 3 }).trim().escape(),
   body('password').isLength({ min: 6 }),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    console.log('Login validation errors:', errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
   const { username, password } = req.body;
-  console.log('Login attempt:', { username, password });
   try {
     const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     const user = result.rows[0];
-    console.log('User found:', user ? { id: user.id, username: user.username } : 'None');
     if (user && await bcrypt.compare(password, user.password)) {
       const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-      console.log('Token generated for user:', user.id);
       res.status(200).json({ token });
     } else {
-      console.log('Login failed: Invalid credentials');
       res.status(401).json({ error: 'Invalid username or password' });
     }
   } catch (error) {

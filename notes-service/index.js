@@ -24,6 +24,7 @@ pool.connect((err) => {
   else console.log('Connected to database successfully');
 });
 
+// Authentication Middleware
 const authMiddleware = (req, res, next) => {
   const token = req.headers['authorization'];
   if (!token) return res.status(401).json({ error: 'No token provided' });
@@ -36,9 +37,10 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// Create Note
 app.post('/notes', authMiddleware, [
-  body('title').isLength({ min: 1 }).trim(), // Removed .escape()
-  body('content').isLength({ min: 1 }).trim(), // Removed .escape()
+  body('title').isLength({ min: 1 }).trim(),
+  body('content').isLength({ min: 1 }).trim(),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -54,6 +56,7 @@ app.post('/notes', authMiddleware, [
   }
 });
 
+// Get Notes
 app.get('/notes', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
@@ -66,6 +69,7 @@ app.get('/notes', authMiddleware, async (req, res) => {
   }
 });
 
+// Delete Note
 app.delete('/notes/:id', authMiddleware, async (req, res) => {
   const noteId = req.params.id;
   try {
@@ -83,8 +87,9 @@ app.delete('/notes/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Update Note
 app.put('/notes/:id', authMiddleware, [
-  body('content').isLength({ min: 1 }).trim(), // Removed .escape()
+  body('content').isLength({ min: 1 }).trim(),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -107,6 +112,7 @@ app.put('/notes/:id', authMiddleware, [
   }
 });
 
+// HTTPS Server
 const PORT = 3002;
 https.createServer({
   key: fs.readFileSync('key.pem'),

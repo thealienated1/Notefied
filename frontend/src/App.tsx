@@ -11,6 +11,10 @@ interface Note {
   updated_at: string;
 }
 
+interface ErrorResponse {
+  error?: string;
+}
+
 const App: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
@@ -19,38 +23,12 @@ const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-      fetchNotes(storedToken);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedNoteId === null && newContent.trim() && token) {
-      addNote();
-    }
-  }, [newContent, token]);
-
-  useEffect(() => {
-    if (
-      selectedNoteId !== null &&
-      newContent.trim() &&
-      token &&
-      newContent !== originalContent
-    ) {
-      console.log('Autosave triggered for note:', selectedNoteId, 'Content:', newContent);
-      const timer = setTimeout(() => {
-        saveEdit();
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [newContent, selectedNoteId, token, originalContent]);
-
+  // Move functions above useEffect hooks
   const fetchNotes = async (authToken: string) => {
     try {
       const response = await axios.get<Note[]>('https://localhost:3002/notes', {
@@ -83,10 +61,36 @@ const App: React.FC = () => {
     }
   };
 
+  const register = async () => {
+    if (password !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    try {
+      const response = await axios.post(
+        'https://localhost:3001/register',
+        { username, password },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      if (response.status === 201) {
+        alert('Registration successful! Please log in.');
+        setIsRegistering(false);
+        setUsername('');
+        setPassword('');
+        setConfirmPassword('');
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ErrorResponse>;
+      console.error('Registration failed:', axiosError.response?.data || axiosError.message);
+      alert('Registration failed: ' + (axiosError.response?.data?.error || 'Server error'));
+    }
+  };
+
   const addNote = async () => {
     if (!token || !newContent.trim()) return;
     const words = newContent.trim().split(/\s+/);
     const title = words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
+    console.log('Creating note with title:', title, 'content:', newContent);
     try {
       const response = await axios.post<Note>(
         'https://localhost:3002/notes',
@@ -129,7 +133,7 @@ const App: React.FC = () => {
 
   const saveEdit = async () => {
     if (!token || !newContent.trim() || selectedNoteId === null) return;
-    console.log('Saving edit for note:', selectedNoteId, 'New content:', newContent);
+    console.log('saveEdit called for note:', selectedNoteId, 'New content:', newContent);
     try {
       const response = await axios.put<Note>(
         `https://localhost:3002/notes/${selectedNoteId}`,
@@ -159,6 +163,35 @@ const App: React.FC = () => {
     setOriginalContent('');
     setSearchQuery('');
   };
+
+  // useEffect hooks after function declarations
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
+      fetchNotes(storedToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedNoteId === null && newContent.trim() && token) {
+      addNote();
+    }
+  }, [newContent, token]);
+
+  useEffect(() => {
+    if (selectedNoteId !== null && newContent.trim() && token && newContent !== originalContent) {
+      console.log('Content changed, scheduling autosave for note:', selectedNoteId, 'Content:', newContent);
+      const timer = setTimeout(() => {
+        console.log('Executing autosave after 2 seconds');
+        saveEdit();
+      }, 2000);
+      return () => {
+        console.log('Clearing timer for note:', selectedNoteId);
+        clearTimeout(timer);
+      };
+    }
+  }, [newContent, selectedNoteId, token, originalContent, saveEdit]);
 
   const filteredNotes = notes
     .filter(
@@ -206,7 +239,6 @@ const App: React.FC = () => {
       <div className={`flex-1 flex justify-center items-center px-4 overflow-hidden ${token ? '' : 'bg-gradient-to-br from-[#0D0D0D] to-[#191919]'}`}>
         {token ? (
           <div className="flex w-full max-w-[1640px] h-full">
-            {/* Left Section */}
             <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
               <div className="flex flex-col h-full relative">
                 <input
@@ -246,7 +278,7 @@ const App: React.FC = () => {
                         className={`transition-all duration-300 ${note.id === selectedNoteId ? 'ml-[7px]' : 'ml-0'}`}
                       >
                         <strong className="text-white">{note.title}</strong>
-                        <p className="text-gray-400 truncate">{note.content}</p>
+                        <p className="text-gray-400">{note.content}</p>
                       </div>
                       <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
                         {new Date(note.updated_at).toLocaleString()}
@@ -271,7 +303,6 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
-            {/* Center Section */}
             <div className="flex-1 p-4 mt-[45px] ml-[0px]">
               <textarea
                 value={newContent}
@@ -280,7 +311,6 @@ const App: React.FC = () => {
                 className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
               />
             </div>
-            {/* Right Section */}
             <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
               <div className="w-full h-[40px] border border-gray-300"></div>
             </div>
@@ -288,7 +318,9 @@ const App: React.FC = () => {
         ) : (
           <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] flex justify-center items-center">
             <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-lg p-6 flex flex-col">
-              <h2 className="text-2xl font-medium text-white mb-6 text-center">Login</h2>
+              <h2 className="text-2xl font-medium text-white mb-6 text-center">
+                {isRegistering ? 'Sign-up' : 'Sign-in'}
+              </h2>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -302,18 +334,42 @@ const App: React.FC = () => {
                 placeholder="Password"
                 className="w-full p-2 bg-[#121212] font-thin rounded-[20px] text-white placeholder-gray-400 placeholder:text-sm mb-7 text-base focus:outline-none focus:bg-[#121212]"
               />
-              <div className="text-center text-sm text-gray-400 mb-4">Forgot password?</div>
+              {isRegistering && (
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm Password"
+                  className="w-full p-2 bg-[#121212] font-thin rounded-[20px] text-white placeholder-gray-400 placeholder:text-sm mb-7 text-base focus:outline-none focus:bg-[#121212]"
+                />
+              )}
+              {!isRegistering && (
+                <div className="text-center text-sm text-gray-400 mb-4">Forgot password?</div>
+              )}
               <div className="flex justify-center mb-6">
                 <button
-                  onClick={login}
+                  onClick={isRegistering ? register : login}
                   className="w-[100px] h-[30px] bg-[#0072DB] text-white rounded-[30px] hover:bg-blue-700 text-xs mt-2"
                 >
-                  Sign In
+                  {isRegistering ? 'Sign Up' : 'Sign In'}
                 </button>
               </div>
               <div className="text-center text-sm text-gray-400 mb-5">
-                Don’t have an account?{' '}
-                <span className="text-purple-400 cursor-pointer">Sign-up</span>
+                {isRegistering ? (
+                  <>
+                    Have an account?{' '}
+                    <span className="text-purple-400 cursor-pointer" onClick={() => setIsRegistering(false)}>
+                      Sign-in
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Don’t have an account?{' '}
+                    <span className="text-purple-400 cursor-pointer" onClick={() => setIsRegistering(true)}>
+                      Sign-up
+                    </span>
+                  </>
+                )}
               </div>
               <div className="text-center text-sm text-gray-400 mb-6">or</div>
               <div className="flex justify-center space-x-5">
