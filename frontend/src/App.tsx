@@ -12,6 +12,10 @@ interface Note {
   updated_at: string;
 }
 
+interface TrashedNote extends Note {
+  trashed_at: string; // Timestamp when moved to trash
+}
+
 interface ErrorResponse {
   error?: string;
 }
@@ -20,10 +24,10 @@ interface ErrorResponse {
 const App: React.FC = () => {
   // State declarations
   const [notes, setNotes] = useState<Note[]>([]);
+  const [trashedNotes, setTrashedNotes] = useState<TrashedNote[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [newContent, setNewContent] = useState('');
   const [originalContent, setOriginalContent] = useState<string>('');
-  // Added states for title management
   const [currentTitle, setCurrentTitle] = useState('');
   const [originalTitle, setOriginalTitle] = useState('');
   const [isTitleManual, setIsTitleManual] = useState(false);
@@ -34,6 +38,7 @@ const App: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isTrashView, setIsTrashView] = useState(false);
 
   // --- Functions (API calls and logic) ---
 
@@ -119,16 +124,16 @@ const App: React.FC = () => {
     }
   };
 
-  const deleteNote = async (id: number) => {
+  const deleteNote = (id: number) => {
     if (!token) return;
-    try {
-      await axios.delete(`https://localhost:3002/notes/${id}`, {
-        headers: { Authorization: token },
-      });
-      const updatedNotes = notes.filter((note) => note.id !== id).sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      );
-      setNotes(updatedNotes);
+    const noteToTrash = notes.find((note) => note.id === id);
+    if (noteToTrash) {
+      const trashedNote: TrashedNote = {
+        ...noteToTrash,
+        trashed_at: new Date().toISOString(),
+      };
+      setTrashedNotes([trashedNote, ...trashedNotes]);
+      setNotes(notes.filter((note) => note.id !== id));
       if (selectedNoteId === id) {
         setSelectedNoteId(null);
         setNewContent('');
@@ -137,10 +142,30 @@ const App: React.FC = () => {
         setOriginalTitle('');
         setIsTitleManual(false);
       }
+    }
+  };
+
+  const restoreNote = (id: number) => {
+    const noteToRestore = trashedNotes.find((note) => note.id === id);
+    if (noteToRestore) {
+      setNotes([noteToRestore, ...notes].sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      ));
+      setTrashedNotes(trashedNotes.filter((note) => note.id !== id));
+    }
+  };
+
+  const permanentlyDeleteNote = async (id: number) => {
+    if (!token) return;
+    try {
+      await axios.delete(`https://localhost:3002/notes/${id}`, {
+        headers: { Authorization: token },
+      });
+      setTrashedNotes(trashedNotes.filter((note) => note.id !== id));
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error('Delete note error:', axiosError.response?.data || axiosError.message);
-      alert('Failed to delete note');
+      console.error('Permanent delete error:', axiosError.response?.data || axiosError.message);
+      alert('Failed to permanently delete note');
     }
   };
 
@@ -150,7 +175,7 @@ const App: React.FC = () => {
     try {
       const response = await axios.put<Note>(
         `https://localhost:3002/notes/${selectedNoteId}`,
-        { title: currentTitle, content: newContent }, // Updated to include title
+        { title: currentTitle, content: newContent },
         { headers: { Authorization: token } }
       );
       console.log('Update successful:', response.data);
@@ -172,6 +197,7 @@ const App: React.FC = () => {
     setToken(null);
     localStorage.removeItem('token');
     setNotes([]);
+    setTrashedNotes([]);
     setSelectedNoteId(null);
     setNewContent('');
     setOriginalContent('');
@@ -179,6 +205,7 @@ const App: React.FC = () => {
     setOriginalTitle('');
     setIsTitleManual(false);
     setSearchQuery('');
+    setIsTrashView(false);
   };
 
   // --- useEffect Hooks ---
@@ -191,7 +218,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Auto-generate title unless manually set
   useEffect(() => {
     if (!isTitleManual && newContent.trim()) {
       const words = newContent.trim().split(/\s+/);
@@ -232,6 +258,14 @@ const App: React.FC = () => {
     )
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
+  const filteredTrashedNotes = trashedNotes
+    .filter(
+      (note) =>
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.content.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.trashed_at).getTime() - new Date(a.trashed_at).getTime());
+
   // --- UI Rendering ---
 
   return (
@@ -271,96 +305,163 @@ const App: React.FC = () => {
         )}
       </header>
 
-      <div className={`flex-1 flex justify-center items-center px-4 overflow-hidden ${token ? '' : 'bg-gradient-to-br from-[#0D0D0D] to-[#191919]'}`}>
+      <div className="flex-1 flex justify-center items-center px-4 overflow-hidden relative">
         {token ? (
-          <div className="flex w-full max-w-[1640px] h-full">
-            <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
-              <div className="flex flex-col h-full relative">
+          isTrashView ? (
+            <div className="w-full max-w-[1640px] h-full flex flex-col items-center relative">
+              <h2 className="absolute left-[80px] top-4 text-white text-[24px] font-bold">Trash</h2>
+              <div className="absolute left-[100px] top-[52px] flex justify-start items-center space-x-6 mt-5">
+                <button className="w-[65px] h-[45px] bg-transparent text-white text-[12px] font-normal rounded-[25px] focus:text-[#5062E7] mr-10 hover:text-[14px] transition-all duration-200">
+                  Select All
+                </button>
+                <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] hover:bg-[#383838]">
+                  Restore
+                </button>
+                <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] hover:bg-[#383838]">
+                  Delete
+                </button>
+              </div>
+              <div className="flex flex-col items-center w-full">
                 <input
                   type="text"
-                  placeholder="Search Notes"
+                  placeholder="Search Trash"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
+                  className="h-[35px] w-[300px] bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-4"
                 />
-                <div className="h-[45px] w-full flex mt-[10px] flex justify-center items-center">
-                  <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] hover:bg-[#383838]">
-                    All
-                  </button>
-                  <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] ml-[30px] hover:bg-[#383838]">
-                    Groups
-                  </button>
-                  <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] ml-[30px] hover:bg-[#383838]">
-                    Projects
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto custom-scrollbar mt-[10px] mb-[60px]">
-                  {filteredNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] mb-3 cursor-pointer hover:bg-[#383838] transition-all duration-300"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedNoteId(note.id);
-                        setNewContent(note.content);
-                        setCurrentTitle(note.title); // Added title handling
-                        setOriginalContent(note.content);
-                        setOriginalTitle(note.title); // Added title handling
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY });
-                      }}
-                    >
-                      <div
-                        className={`absolute left-1 top-[12px] h-[96px] bg-gradient-to-b from-[#2996FC] via-[#1238D4] to-[#592BFF] ${
-                          note.id === selectedNoteId ? 'w-[4px]' : 'w-0'
-                        } transition-all duration-300 rounded-[4px]`}
-                      ></div>
-                      <div
-                        className={`transition-all duration-300 ${note.id === selectedNoteId ? 'ml-[7px]' : 'ml-0'}`}
-                      >
-                        <strong className="text-white">{note.title}</strong>
-                        <p className="text-gray-400">{note.content}</p>
-                      </div>
-                      <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
-                        {new Date(note.updated_at).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="absolute bottom-[-3px] left-0 w-full flex justify-end pr-4 pb-4">
-                  <button className="w-[40px] h-[40px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838] mr-6">
-                    <img src={TrashIcon} alt="Trash" className="w-7 h-7" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedNoteId(null);
-                      setNewContent('');
-                      setOriginalContent('');
-                      setCurrentTitle(''); // Added title clearing
-                      setOriginalTitle(''); // Added title clearing
-                      setIsTitleManual(false); // Added title reset
-                    }}
-                    className="w-[40px] h-[40px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838]"
+              </div>
+              <div className="w-[300px] flex-1 overflow-y-auto custom-scrollbar mt-4 mb-[60px]">
+                {filteredTrashedNotes.map((note) => (
+                  <div
+                    key={note.id}
+                    className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] mb-3 cursor-pointer hover:bg-[#383838] transition-all duration-300"
                   >
-                    <img src={PlusIcon} alt="Add" className="w-7 h-7" />
-                  </button>
-                </div>
+                    <div className="ml-[7px]">
+                      <strong className="text-white">{note.title}</strong>
+                      <p className="text-gray-400">{note.content.slice(0, 50)}...</p>
+                    </div>
+                    <div className="absolute bottom-1 left-2 flex space-x-2">
+                      <button
+                        onClick={() => restoreNote(note.id)}
+                        className="text-green-400 text-[10px]"
+                      >
+                        Restore
+                      </button>
+                      <button
+                        onClick={() => permanentlyDeleteNote(note.id)}
+                        className="text-red-400 text-[10px]"
+                      >
+                        Delete Permanently
+                      </button>
+                    </div>
+                    <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
+                      Trashed: {new Date(note.trashed_at).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="w-full flex justify-end pr-4 pb-4">
+                <button
+                  onClick={() => setIsTrashView(false)}
+                  className="w-[45px] h-[45px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838] mr-6"
+                >
+                  <img src={TrashIcon} alt="Trash" className="w-7 h-7" />
+                </button>
               </div>
             </div>
-            <div className="flex-1 p-4 mt-[45px] ml-[0px]">
-              <textarea
-                value={newContent}
-                onChange={(e) => setNewContent(e.target.value)}
-                placeholder="Start typing your note..."
-                className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
-              />
+          ) : (
+            <div className="flex w-full max-w-[1640px] h-full">
+              <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
+                <div className="flex flex-col h-full relative">
+                  <input
+                    type="text"
+                    placeholder="Search Notes"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
+                  />
+                  <div className="h-[45px] w-full flex mt-[10px] flex justify-center items-center">
+                    <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] hover:bg-[#383838]">
+                      All
+                    </button>
+                    <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] ml-[30px] hover:bg-[#383838]">
+                      Groups
+                    </button>
+                    <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] ml-[30px] hover:bg-[#383838]">
+                      Projects
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar mt-[10px] mb-[60px]">
+                    {filteredNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] mb-3 cursor-pointer hover:bg-[#383838] transition-all duration-300"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedNoteId(note.id);
+                          setNewContent(note.content);
+                          setCurrentTitle(note.title);
+                          setOriginalContent(note.content);
+                          setOriginalTitle(note.title);
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY });
+                        }}
+                      >
+                        <div
+                          className={`absolute left-1 top-[12px] h-[96px] bg-gradient-to-b from-[#2996FC] via-[#1238D4] to-[#592BFF] ${
+                            note.id === selectedNoteId ? 'w-[4px]' : 'w-0'
+                          } transition-all duration-300 rounded-[4px]`}
+                        ></div>
+                        <div
+                          className={`transition-all duration-300 ${note.id === selectedNoteId ? 'ml-[7px]' : 'ml-0'}`}
+                        >
+                          <strong className="text-white">{note.title}</strong>
+                          <p className="text-gray-400">{note.content}</p>
+                        </div>
+                        <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
+                          {new Date(note.updated_at).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="absolute bottom-[-3px] left-0 w-full flex justify-end pr-4 pb-4">
+                    <button
+                      onClick={() => setIsTrashView(true)}
+                      className="w-[45px] h-[45px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838] mr-6"
+                    >
+                      <img src={TrashIcon} alt="Trash" className="w-7 h-7" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedNoteId(null);
+                        setNewContent('');
+                        setOriginalContent('');
+                        setCurrentTitle('');
+                        setOriginalTitle('');
+                        setIsTitleManual(false);
+                      }}
+                      className="w-[45px] h-[45px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838]"
+                    >
+                      <img src={PlusIcon} alt="Add" className="w-7 h-7" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 p-4 mt-[45px] ml-[0px]">
+                <textarea
+                  value={newContent}
+                  onChange={(e) => setNewContent(e.target.value)}
+                  placeholder="Start typing your note..."
+                  className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
+                />
+              </div>
+              <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
+                <div className="w-full h-[40px] border border-gray-300"></div>
+              </div>
             </div>
-            <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
-              <div className="w-full h-[40px] border border-gray-300"></div>
-            </div>
-          </div>
+          )
         ) : (
           <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] flex justify-center items-center">
             <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-lg p-6 flex flex-col">
@@ -428,7 +529,6 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* New context menu */}
       {contextMenu && (
         <div
           className="absolute bg-[#1F1F1F] text-white rounded-[10px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] w-[120px] h-[130px] flex flex-col justify-center py-2"
