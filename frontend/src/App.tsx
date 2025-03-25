@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios, { AxiosError } from 'axios';
 import TrashIcon from './assets/icons/trash.svg';
 import PlusIcon from './assets/icons/plus.svg';
+import BackIcon from './assets/icons/back.svg';
 
 // Interfaces for TypeScript type definitions
 interface Note {
@@ -192,6 +193,8 @@ const App: React.FC = () => {
       console.error('Update note error:', axiosError.response?.data || axiosError.message);
     }
   };
+  
+  const [isSelectAllActive, setIsSelectAllActive] = useState(false);
 
   const logout = () => {
     setToken(null);
@@ -308,12 +311,36 @@ const App: React.FC = () => {
       <div className="flex-1 flex justify-center items-center px-4 overflow-hidden relative">
         {token ? (
           isTrashView ? (
-            <div className="w-full max-w-[1640px] h-full flex flex-col items-center relative">
-              <h2 className="absolute left-[80px] top-4 text-white text-[24px] font-bold">Trash</h2>
-              <div className="absolute left-[100px] top-[52px] flex justify-start items-center space-x-6 mt-5">
-                <button className="w-[65px] h-[45px] bg-transparent text-white text-[12px] font-normal rounded-[25px] focus:text-[#5062E7] mr-10 hover:text-[14px] transition-all duration-200">
+        // Trash view
+        <div className="w-full max-w-[1640px] h-full flex flex-col items-center relative">
+          {/* Header section with back button */}
+          <div className="absolute left-[40px] bg-transparent top-4 flex items-center space-x-4">
+            <button
+              onClick={() => setIsTrashView(false)}
+              className="w-[45px] h-[45px] bg-transparent rounded-full flex items-center justify-center hover:text-[#5062E7] transition-all duration-200"
+            >
+              <img
+                src={BackIcon}
+                alt="Back to Notes"
+                className="w-7 h-7 hover:w-8 hover:h-8 transition-all duration-200"
+              />
+            </button>
+          </div>
+          {/* Separate container for Trash title */}
+          <div className="absolute left-[120px] top-5">
+            <h2 className="text-white text-[24px] font-bold">Bin</h2>
+          </div>
+              {/* Trash action buttons */}
+              <div className="absolute left-[110px] top-[52px] flex justify-start items-center space-x-6 mt-5">
+                <button
+                  onClick={() => setIsSelectAllActive((prev) => !prev)} // Toggle state on click
+                  className={`w-[65px] h-[45px] bg-transparent text-white font-normal rounded-[25px] mr-10 transition-all duration-200 ${
+                    isSelectAllActive ? 'text-[11px]' : 'text-[12px]'
+                  } hover:text-[13px]`}
+                >
                   Select All
                 </button>
+                {/* Rest of the buttons remain unchanged */}
                 <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] hover:bg-[#383838]">
                   Restore
                 </button>
@@ -321,15 +348,19 @@ const App: React.FC = () => {
                   Delete
                 </button>
               </div>
+
+              {/* Search bar */}
               <div className="flex flex-col items-center w-full">
                 <input
                   type="text"
-                  placeholder="Search Trash"
+                  placeholder="Search Bin"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-[35px] w-[300px] bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-4"
+                  className="h-[35px] w-[300px] bg-[#252525] text-white text-[12px] px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-4"
                 />
               </div>
+
+              {/* Trashed notes list */}
               <div className="w-[300px] flex-1 overflow-y-auto custom-scrollbar mt-4 mb-[60px]">
                 {filteredTrashedNotes.map((note) => (
                   <div
@@ -360,16 +391,9 @@ const App: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <div className="w-full flex justify-end pr-4 pb-4">
-                <button
-                  onClick={() => setIsTrashView(false)}
-                  className="w-[45px] h-[45px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838] mr-6"
-                >
-                  <img src={TrashIcon} alt="Trash" className="w-7 h-7" />
-                </button>
-              </div>
             </div>
           ) : (
+            // Main notes view
             <div className="flex w-full max-w-[1640px] h-full">
               <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
                 <div className="flex flex-col h-full relative">
