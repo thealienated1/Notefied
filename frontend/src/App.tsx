@@ -40,7 +40,7 @@ const App: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number; isTrash?: boolean } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isTrashView, setIsTrashView] = useState(false);
-  const [isSelectAllActive, setIsSelectAllActive] = useState(false);
+  const [selectedTrashedNotes, setSelectedTrashedNotes] = useState<number[]>([]);
 
   // Fetch active notes from the backend
   const fetchNotes = async (authToken: string) => {
@@ -245,6 +245,7 @@ const App: React.FC = () => {
     setIsTitleManual(false);
     setSearchQuery('');
     setIsTrashView(false);
+    setSelectedTrashedNotes([]);
   };
 
   // Load token and fetch notes on initial render
@@ -315,7 +316,7 @@ const App: React.FC = () => {
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
       />
-      {/* Custom scrollbar styles */}
+      {/* Custom scrollbar and ring styles */}
       <style>
         {`
           .custom-scrollbar::-webkit-scrollbar {
@@ -334,6 +335,17 @@ const App: React.FC = () => {
           .custom-scrollbar {
             scrollbar-width: thin;
             scrollbar-color: #888 transparent;
+          }
+          .note-tile .ring {
+            display: none;
+            border: 2px solid #1F1F1F;
+          }
+          .note-tile:hover .ring,
+          .note-tile.selected .ring {
+            display: block;
+          }
+          .note-tile.selected .ring {
+            border-color: #677FF6;
           }
         `}
       </style>
@@ -360,7 +372,10 @@ const App: React.FC = () => {
               {/* Back button to return to main notes view */}
               <div className="absolute left-[40px] bg-transparent top-4 flex items-center space-x-4">
                 <button
-                  onClick={() => setIsTrashView(false)}
+                  onClick={() => {
+                    setIsTrashView(false);
+                    setSelectedTrashedNotes([]); // Clear selection when leaving trash view
+                  }}
                   className="w-[45px] h-[45px] bg-transparent rounded-full flex items-center justify-center hover:text-[#5062E7] transition-all duration-200"
                 >
                   <img
@@ -377,17 +392,39 @@ const App: React.FC = () => {
               {/* Action buttons: Select All, Restore, Delete */}
               <div className="absolute left-[110px] top-[52px] flex justify-start items-center space-x-6 mt-5">
                 <button
-                  onClick={() => setIsSelectAllActive((prev) => !prev)}
-                  className={`w-[65px] h-[45px] bg-transparent text-white font-normal rounded-[25px] mr-10 transition-all duration-200 ${
-                    isSelectAllActive ? 'text-[11px]' : 'text-[12px]'
-                  } hover:text-[13px]`}
+                  onClick={() => {
+                    if (selectedTrashedNotes.length === filteredTrashedNotes.length) {
+                      setSelectedTrashedNotes([]);
+                    } else {
+                      setSelectedTrashedNotes(filteredTrashedNotes.map((note) => note.id));
+                    }
+                  }}
+                  className="w-[65px] h-[45px] bg-transparent text-white font-normal rounded-[25px] mr-10 transition-all duration-200 text-[12px] hover:text-[13px]"
                 >
                   Select All
                 </button>
-                <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] hover:bg-[#383838]">
+                <button
+                  disabled={selectedTrashedNotes.length === 0}
+                  onClick={async () => {
+                    await Promise.all(selectedTrashedNotes.map((id) => restoreNote(id)));
+                    setSelectedTrashedNotes([]);
+                  }}
+                  className={`w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] ${
+                    selectedTrashedNotes.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#383838]'
+                  }`}
+                >
                   Restore
                 </button>
-                <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] hover:bg-[#383838]">
+                <button
+                  disabled={selectedTrashedNotes.length === 0}
+                  onClick={async () => {
+                    await Promise.all(selectedTrashedNotes.map((id) => permanentlyDeleteNote(id)));
+                    setSelectedTrashedNotes([]);
+                  }}
+                  className={`w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] ${
+                    selectedTrashedNotes.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#383838]'
+                  }`}
+                >
                   Delete
                 </button>
               </div>
@@ -403,23 +440,30 @@ const App: React.FC = () => {
               </div>
               {/* Container for trashed note tiles */}
               <div className="absolute left-[100px] top-[107px] w-[calc(100%-120px)] overflow-y-auto custom-scrollbar h-[calc(100%-127px)]">
-                {/* Flex container to arrange tiles horizontally in rows */}
-                <div className="flex flex-wrap gap-x-20 gap-y-[100px] mt-10">
+                <div className="flex flex-wrap gap-x-20 gap-y-[80px] mt-10">
                   {filteredTrashedNotes.map((note) => (
                     <div
                       key={note.id}
-                      className="relative w-[300px] h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] cursor-pointer hover:bg-[#383838] transition-all duration-300 flex-shrink-0" // Added 'relative' to make this the positioning context
+                      className={`note-tile relative w-[300px] h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] cursor-pointer hover:bg-[#383838] transition-all duration-300 flex-shrink-0 ${
+                        selectedTrashedNotes.includes(note.id) ? 'selected' : ''
+                      }`}
+                      onClick={() => {
+                        setSelectedTrashedNotes((prev) =>
+                          prev.includes(note.id)
+                            ? prev.filter((id) => id !== note.id)
+                            : [...prev, note.id]
+                        );
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY, isTrash: true });
                       }}
                     >
-                      {/* Note title and truncated content */}
+                      <div className="ring absolute top-2 left-2 w-[13px] h-[13px] rounded-full"></div>
                       <div className="ml-[7px]">
                         <strong className="text-white text-sm">{note.title}</strong>
                         <p className="text-gray-400 text-xs">{note.content.slice(0, 50)}...</p>
                       </div>
-                      {/* Trashed timestamp, positioned within the tile */}
                       <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
                         Trashed: {new Date(note.trashed_at).toLocaleString()}
                       </span>
@@ -472,7 +516,6 @@ const App: React.FC = () => {
                           setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY });
                         }}
                       >
-                        {/* Selection indicator */}
                         <div
                           className={`absolute left-1 top-[12px] h-[96px] bg-gradient-to-b from-[#2996FC] via-[#1238D4] to-[#592BFF] ${
                             note.id === selectedNoteId ? 'w-[4px]' : 'w-0'
