@@ -33,6 +33,7 @@ const authMiddleware = (req, res, next) => {
     req.userId = decoded.id;
     next();
   } catch (error) {
+    console.error('Token verification error:', error.message);
     res.status(401).json({ error: 'Invalid token' });
   }
 };
@@ -52,6 +53,7 @@ app.post('/notes', authMiddleware, [
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
+    console.error('Create note error:', error.message);
     res.status(500).json({ error: 'Failed to create note' });
   }
 });
@@ -65,25 +67,63 @@ app.get('/notes', authMiddleware, async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
+    console.error('Fetch notes error:', error.message);
     res.status(500).json({ error: 'Failed to fetch notes' });
   }
 });
 
-// Delete Note
-app.delete('/notes/:id', authMiddleware, async (req, res) => {
-  const noteId = req.params.id;
+// Get Trashed Notes
+app.get('/trashed-notes', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'DELETE FROM notes WHERE id = $1 AND user_id = $2 RETURNING *',
+      'SELECT * FROM trashed_notes WHERE user_id = $1 ORDER BY trashed_at DESC',
+      [req.userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Fetch trashed notes error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch trashed notes' });
+  }
+});
+
+// Move Note to Trash
+app.delete('/notes/:id', authMiddleware, async (req, res) => {
+  const noteId = parseInt(req.params.id, 10);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Fetch the note to move
+    const noteResult = await client.query(
+      'SELECT * FROM notes WHERE id = $1 AND user_id = $2',
       [noteId, req.userId]
     );
-    if (result.rowCount === 0) {
+    if (noteResult.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Note not found or not owned by user' });
     }
-    res.status(200).json({ message: 'Note deleted successfully' });
+    const note = noteResult.rows[0];
+
+    // Insert into trashed_notes
+    await client.query(
+      'INSERT INTO trashed_notes (note_id, user_id, title, content, trashed_at) VALUES ($1, $2, $3, $4, NOW())',
+      [note.id, note.user_id, note.title, note.content]
+    );
+
+    // Delete from notes
+    await client.query(
+      'DELETE FROM notes WHERE id = $1 AND user_id = $2',
+      [noteId, req.userId]
+    );
+
+    await client.query('COMMIT');
+    res.status(204).send();
   } catch (error) {
-    console.error('Delete note error:', error.message);
-    res.status(500).json({ error: 'Failed to delete note' });
+    await client.query('ROLLBACK');
+    console.error('Move to trash error:', error.message);
+    res.status(500).json({ error: 'Failed to move note to trash', details: error.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -93,7 +133,7 @@ app.put('/notes/:id', authMiddleware, [
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-  const noteId = req.params.id;
+  const noteId = parseInt(req.params.id, 10);
   const { content } = req.body;
   const words = content.trim().split(/\s+/);
   const title = words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
