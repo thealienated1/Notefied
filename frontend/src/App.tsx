@@ -14,7 +14,7 @@ interface Note {
 }
 
 interface TrashedNote extends Note {
-  trashed_at: string; // Timestamp when the note was moved to trash
+  trashed_at: string; // Timestamp when moved to trash
 }
 
 interface ErrorResponse {
@@ -37,7 +37,7 @@ const App: React.FC = () => {
   const [password, setPassword] = useState(''); // Password for login/register
   const [confirmPassword, setConfirmPassword] = useState(''); // Confirm password for registration
   const [isRegistering, setIsRegistering] = useState(false); // Toggle between login and register views
-  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number } | null>(null); // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number; isTrash?: boolean } | null>(null); // Context menu state with isTrash flag
   const [searchQuery, setSearchQuery] = useState(''); // Search query for filtering notes
   const [isTrashView, setIsTrashView] = useState(false); // Toggle between main notes and trash views
   const [isSelectAllActive, setIsSelectAllActive] = useState(false); // Toggle for "Select All" in trash view
@@ -86,8 +86,8 @@ const App: React.FC = () => {
       );
       setToken(response.data.token);
       localStorage.setItem('token', response.data.token);
-      await fetchNotes(response.data.token); // Load notes after login
-      await fetchTrashedNotes(response.data.token); // Load trashed notes after login
+      await fetchNotes(response.data.token);
+      await fetchTrashedNotes(response.data.token);
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Login failed:', axiosError.response?.data || axiosError.message);
@@ -146,19 +146,15 @@ const App: React.FC = () => {
     }
   };
 
-  // Delete a note (move to trash)
+  // Move note to trash
   const deleteNote = async (id: number) => {
     if (!token) return;
     try {
-      // Send delete request to backend to move note to trashed_notes
       await axios.delete(`https://localhost:3002/notes/${id}`, {
         headers: { Authorization: token },
       });
-      // Remove note from local notes state
       setNotes(notes.filter((note) => note.id !== id));
-      // Fetch updated trashed notes from server to reflect in UI
       await fetchTrashedNotes(token);
-      // Clear selection if the deleted note was selected
       if (selectedNoteId === id) {
         setSelectedNoteId(null);
         setNewContent('');
@@ -171,8 +167,48 @@ const App: React.FC = () => {
       const axiosError = error as AxiosError;
       console.error('Delete note error:', axiosError.response?.data || axiosError.message);
       alert('Failed to move note to trash');
-      // Refresh both lists to sync with server state on error
       await fetchNotes(token);
+      await fetchTrashedNotes(token);
+    }
+  };
+
+  // Restore note from trash to main notes
+  const restoreNote = async (id: number) => {
+    if (!token) return;
+    try {
+      const response = await axios.post<Note>(
+        `https://localhost:3002/trashed-notes/${id}/restore`,
+        {},
+        { headers: { Authorization: token } }
+      );
+      // Add restored note to notes list
+      setNotes([...notes, response.data].sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      ));
+      // Remove from trashed notes
+      setTrashedNotes(trashedNotes.filter((note) => note.id !== id));
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Restore note error:', axiosError.response?.data || axiosError.message);
+      alert('Failed to restore note');
+      await fetchNotes(token);
+      await fetchTrashedNotes(token);
+    }
+  };
+
+  // Permanently delete note from trash
+  const permanentlyDeleteNote = async (id: number) => {
+    if (!token) return;
+    try {
+      await axios.delete(`https://localhost:3002/trashed-notes/${id}`, {
+        headers: { Authorization: token },
+      });
+      // Remove from trashed notes
+      setTrashedNotes(trashedNotes.filter((note) => note.id !== id));
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Permanent delete error:', axiosError.response?.data || axiosError.message);
+      alert('Failed to permanently delete note');
       await fetchTrashedNotes(token);
     }
   };
@@ -260,7 +296,6 @@ const App: React.FC = () => {
 
   // --- Filtering Logic ---
 
-  // Filter and sort active notes based on search query
   const filteredNotes = notes
     .filter(
       (note) =>
@@ -269,7 +304,6 @@ const App: React.FC = () => {
     )
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
-  // Filter and sort trashed notes based on search query
   const filteredTrashedNotes = trashedNotes
     .filter(
       (note) =>
@@ -285,12 +319,10 @@ const App: React.FC = () => {
       className="h-screen bg-gradient-to-br from-[#141414] to-[#1D1D1D] font-inter flex flex-col"
       onClick={() => setContextMenu(null)} // Close context menu on outside click
     >
-      {/* Load Inter font */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
       />
-      {/* Custom scrollbar styles */}
       <style>
         {`
           .custom-scrollbar::-webkit-scrollbar {
@@ -332,7 +364,6 @@ const App: React.FC = () => {
           isTrashView ? (
             // --- Trash View ---
             <div className="w-full max-w-[1640px] h-full flex flex-col items-center relative">
-              {/* Back button to return to notes view */}
               <div className="absolute left-[40px] bg-transparent top-4 flex items-center space-x-4">
                 <button
                   onClick={() => setIsTrashView(false)}
@@ -345,11 +376,9 @@ const App: React.FC = () => {
                   />
                 </button>
               </div>
-              {/* Trash title */}
               <div className="absolute left-[120px] top-5">
                 <h2 className="text-white text-[24px] font-bold">Bin</h2>
               </div>
-              {/* Trash action buttons */}
               <div className="absolute left-[110px] top-[52px] flex justify-start items-center space-x-6 mt-5">
                 <button
                   onClick={() => setIsSelectAllActive((prev) => !prev)}
@@ -359,7 +388,6 @@ const App: React.FC = () => {
                 >
                   Select All
                 </button>
-                {/* Placeholder buttons for future functionality */}
                 <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] hover:bg-[#383838]">
                   Restore
                 </button>
@@ -367,8 +395,6 @@ const App: React.FC = () => {
                   Delete
                 </button>
               </div>
-
-              {/* Search bar for trashed notes */}
               <div className="flex flex-col items-center w-full">
                 <input
                   type="text"
@@ -378,19 +404,21 @@ const App: React.FC = () => {
                   className="h-[35px] w-[300px] bg-[#252525] text-white text-[12px] px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-4"
                 />
               </div>
-
-              {/* Trashed notes list */}
+              {/* Trashed notes list with context menu */}
               <div className="w-[300px] flex-1 overflow-y-auto custom-scrollbar mt-4 mb-[60px]">
                 {filteredTrashedNotes.map((note) => (
                   <div
                     key={note.id}
                     className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] mb-3 cursor-pointer hover:bg-[#383838] transition-all duration-300"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY, isTrash: true });
+                    }}
                   >
                     <div className="ml-[7px]">
                       <strong className="text-white">{note.title}</strong>
                       <p className="text-gray-400">{note.content.slice(0, 50)}...</p>
                     </div>
-                    {/* Placeholder for future restore/permanent delete buttons */}
                     <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
                       Trashed: {new Date(note.trashed_at).toLocaleString()}
                     </span>
@@ -401,10 +429,8 @@ const App: React.FC = () => {
           ) : (
             // --- Main Notes View ---
             <div className="flex w-full max-w-[1640px] h-full">
-              {/* Sidebar with notes list */}
               <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
                 <div className="flex flex-col h-full relative">
-                  {/* Search bar for notes */}
                   <input
                     type="text"
                     placeholder="Search Notes"
@@ -412,7 +438,6 @@ const App: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
                   />
-                  {/* Filter buttons (placeholders) */}
                   <div className="h-[45px] w-full flex mt-[10px] flex justify-center items-center">
                     <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] hover:bg-[#383838]">
                       All
@@ -424,7 +449,6 @@ const App: React.FC = () => {
                       Projects
                     </button>
                   </div>
-                  {/* Notes list */}
                   <div className="flex-1 overflow-y-auto custom-scrollbar mt-[10px] mb-[60px]">
                     {filteredNotes.map((note) => (
                       <div
@@ -460,7 +484,6 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                  {/* Action buttons (Trash and Add) */}
                   <div className="absolute bottom-[-3px] left-0 w-full flex justify-end pr-4 pb-4">
                     <button
                       onClick={() => setIsTrashView(true)}
@@ -484,7 +507,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {/* Note editor */}
               <div className="flex-1 p-4 mt-[45px] ml-[0px]">
                 <textarea
                   value={newContent}
@@ -493,7 +515,6 @@ const App: React.FC = () => {
                   className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
                 />
               </div>
-              {/* Sidebar placeholder */}
               <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
                 <div className="w-full h-[40px] border border-gray-300"></div>
               </div>
@@ -573,45 +594,72 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Context Menu */}
+      {/* Context Menu for Notes and Trash */}
       {contextMenu && (
         <div
-          className="absolute bg-[#1F1F1F] text-white rounded-[10px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] w-[120px] h-[130px] flex flex-col justify-center py-2"
+          className="absolute bg-[#1F1F1F] text-white rounded-[10px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] w-[120px] flex flex-col justify-center py-2"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={() => {
-              const note = notes.find((n) => n.id === contextMenu.noteId);
-              if (note) {
-                setSelectedNoteId(note.id);
-                setNewContent(note.content);
-                setCurrentTitle(note.title);
-                setOriginalContent(note.content);
-                setOriginalTitle(note.title);
-                setIsTitleManual(false);
-              }
-              setContextMenu(null);
-            }}
-            className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] transition-all duration-200"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => setContextMenu(null)}
-            className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] transition-all duration-200 mt-2"
-          >
-            Pin
-          </button>
-          <button
-            onClick={() => {
-              deleteNote(contextMenu.noteId); // Call deleteNote to move note to trash
-              setContextMenu(null);
-            }}
-            className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] text-red-400 transition-all duration-200 mt-4"
-          >
-            Delete
-          </button>
+          {contextMenu.isTrash ? (
+            // Trash context menu
+            <>
+              <button
+                onClick={() => {
+                  restoreNote(contextMenu.noteId);
+                  setContextMenu(null);
+                }}
+                className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] transition-all duration-200 text-green-400"
+              >
+                Restore
+              </button>
+              <button
+                onClick={() => {
+                  permanentlyDeleteNote(contextMenu.noteId);
+                  setContextMenu(null);
+                }}
+                className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] text-red-400 transition-all duration-200 mt-4"
+              >
+                Delete
+              </button>
+            </>
+          ) : (
+            // Main notes context menu
+            <>
+              <button
+                onClick={() => {
+                  const note = notes.find((n) => n.id === contextMenu.noteId);
+                  if (note) {
+                    setSelectedNoteId(note.id);
+                    setNewContent(note.content);
+                    setCurrentTitle(note.title);
+                    setOriginalContent(note.content);
+                    setOriginalTitle(note.title);
+                    setIsTitleManual(false);
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] transition-all duration-200"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => setContextMenu(null)}
+                className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] transition-all duration-200 mt-2"
+              >
+                Pin
+              </button>
+              <button
+                onClick={() => {
+                  deleteNote(contextMenu.noteId);
+                  setContextMenu(null);
+                }}
+                className="w-[100px] h-[25px] mx-auto text-left pl-3 text-[14px] rounded-[13px] hover:bg-[#383838] hover:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] text-red-400 transition-all duration-200 mt-4"
+              >
+                Delete
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

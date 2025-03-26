@@ -9,8 +9,9 @@ const fs = require('fs');
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: 'https://localhost:3000' }));
+app.use(cors({ origin: 'https://localhost:3000' })); // Allow frontend origin
 
+// Database connection pool
 const pool = new Pool({
   user: 'postgres',
   host: 'localhost',
@@ -24,7 +25,7 @@ pool.connect((err) => {
   else console.log('Connected to database successfully');
 });
 
-// Authentication Middleware
+// Middleware to authenticate JWT token
 const authMiddleware = (req, res, next) => {
   const token = req.headers['authorization'];
   if (!token) return res.status(401).json({ error: 'No token provided' });
@@ -38,7 +39,7 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// Create Note
+// Create a new note
 app.post('/notes', authMiddleware, [
   body('title').isLength({ min: 1 }).trim(),
   body('content').isLength({ min: 1 }).trim(),
@@ -58,7 +59,7 @@ app.post('/notes', authMiddleware, [
   }
 });
 
-// Get Notes
+// Get all active notes for the user
 app.get('/notes', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
@@ -72,7 +73,7 @@ app.get('/notes', authMiddleware, async (req, res) => {
   }
 });
 
-// Get Trashed Notes
+// Get all trashed notes for the user
 app.get('/trashed-notes', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
@@ -86,7 +87,7 @@ app.get('/trashed-notes', authMiddleware, async (req, res) => {
   }
 });
 
-// Move Note to Trash
+// Move note to trash
 app.delete('/notes/:id', authMiddleware, async (req, res) => {
   const noteId = parseInt(req.params.id, 10);
   const client = await pool.connect();
@@ -127,7 +128,66 @@ app.delete('/notes/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Update Note
+// Restore note from trash to notes
+app.post('/trashed-notes/:id/restore', authMiddleware, async (req, res) => {
+  const trashedNoteId = parseInt(req.params.id, 10);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Fetch the trashed note
+    const trashedResult = await client.query(
+      'SELECT * FROM trashed_notes WHERE id = $1 AND user_id = $2',
+      [trashedNoteId, req.userId]
+    );
+    if (trashedResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Trashed note not found or not owned by user' });
+    }
+    const trashedNote = trashedResult.rows[0];
+
+    // Insert back into notes with a new ID
+    const restoredResult = await client.query(
+      'INSERT INTO notes (user_id, title, content, updated_at) VALUES ($1, $2, $3, NOW()) RETURNING *',
+      [trashedNote.user_id, trashedNote.title, trashedNote.content]
+    );
+
+    // Delete from trashed_notes
+    await client.query(
+      'DELETE FROM trashed_notes WHERE id = $1 AND user_id = $2',
+      [trashedNoteId, req.userId]
+    );
+
+    await client.query('COMMIT');
+    res.status(200).json(restoredResult.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Restore note error:', error.message);
+    res.status(500).json({ error: 'Failed to restore note' });
+  } finally {
+    client.release();
+  }
+});
+
+// Permanently delete note from trash
+app.delete('/trashed-notes/:id', authMiddleware, async (req, res) => {
+  const trashedNoteId = parseInt(req.params.id, 10);
+  try {
+    const result = await pool.query(
+      'DELETE FROM trashed_notes WHERE id = $1 AND user_id = $2 RETURNING *',
+      [trashedNoteId, req.userId]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Trashed note not found or not owned by user' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Permanent delete error:', error.message);
+    res.status(500).json({ error: 'Failed to permanently delete note' });
+  }
+});
+
+// Update an existing note
 app.put('/notes/:id', authMiddleware, [
   body('content').isLength({ min: 1 }).trim(),
 ], async (req, res) => {
@@ -152,7 +212,7 @@ app.put('/notes/:id', authMiddleware, [
   }
 });
 
-// HTTPS Server
+// Start HTTPS server
 const PORT = 3002;
 https.createServer({
   key: fs.readFileSync('key.pem'),
