@@ -87,7 +87,7 @@ app.get('/trashed-notes', authMiddleware, async (req, res) => {
   }
 });
 
-// Move note to trash
+// Move note to trash, preserving original updated_at
 app.delete('/notes/:id', authMiddleware, async (req, res) => {
   const noteId = parseInt(req.params.id, 10);
   const client = await pool.connect();
@@ -105,10 +105,10 @@ app.delete('/notes/:id', authMiddleware, async (req, res) => {
     }
     const note = noteResult.rows[0];
 
-    // Insert into trashed_notes
+    // Insert into trashed_notes, including original_updated_at
     await client.query(
-      'INSERT INTO trashed_notes (note_id, user_id, title, content, trashed_at) VALUES ($1, $2, $3, $4, NOW())',
-      [note.id, note.user_id, note.title, note.content]
+      'INSERT INTO trashed_notes (note_id, user_id, title, content, trashed_at, original_updated_at) VALUES ($1, $2, $3, $4, NOW(), $5)',
+      [note.id, note.user_id, note.title, note.content, note.updated_at]
     );
 
     // Delete from notes
@@ -128,7 +128,7 @@ app.delete('/notes/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Restore note from trash to notes
+// Restore note from trash to notes, using original_updated_at
 app.post('/trashed-notes/:id/restore', authMiddleware, async (req, res) => {
   const trashedNoteId = parseInt(req.params.id, 10);
   const client = await pool.connect();
@@ -146,10 +146,10 @@ app.post('/trashed-notes/:id/restore', authMiddleware, async (req, res) => {
     }
     const trashedNote = trashedResult.rows[0];
 
-    // Insert back into notes with a new ID
+    // Insert back into notes, preserving original_updated_at (falls back to NOW() if null)
     const restoredResult = await client.query(
-      'INSERT INTO notes (user_id, title, content, updated_at) VALUES ($1, $2, $3, NOW()) RETURNING *',
-      [trashedNote.user_id, trashedNote.title, trashedNote.content]
+      'INSERT INTO notes (user_id, title, content, updated_at) VALUES ($1, $2, $3, COALESCE($4, NOW())) RETURNING *',
+      [trashedNote.user_id, trashedNote.title, trashedNote.content, trashedNote.original_updated_at]
     );
 
     // Delete from trashed_notes
@@ -163,7 +163,7 @@ app.post('/trashed-notes/:id/restore', authMiddleware, async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Restore note error:', error.message);
-    res.status(500).json({ error: 'Failed to restore note' });
+    res.status(500).json({ error: 'Failed to restore note', details: error.message });
   } finally {
     client.release();
   }

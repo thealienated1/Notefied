@@ -15,6 +15,7 @@ interface Note {
 
 interface TrashedNote extends Note {
   trashed_at: string; // Timestamp when moved to trash
+  original_updated_at?: string; // Optional original updated_at from notes table
 }
 
 interface ErrorResponse {
@@ -23,28 +24,25 @@ interface ErrorResponse {
 
 // Main App component
 const App: React.FC = () => {
-  // --- State Declarations ---
-  const [notes, setNotes] = useState<Note[]>([]); // List of active notes
-  const [trashedNotes, setTrashedNotes] = useState<TrashedNote[]>([]); // List of trashed notes
-  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null); // ID of the currently selected note
-  const [newContent, setNewContent] = useState(''); // Content of the note being edited or created
-  const [originalContent, setOriginalContent] = useState<string>(''); // Original content for comparison
-  const [currentTitle, setCurrentTitle] = useState(''); // Current title of the note
-  const [originalTitle, setOriginalTitle] = useState(''); // Original title for comparison
-  const [isTitleManual, setIsTitleManual] = useState(false); // Flag to track if title was manually set
-  const [token, setToken] = useState<string | null>(null); // Authentication token
-  const [username, setUsername] = useState(''); // Username for login/register
-  const [password, setPassword] = useState(''); // Password for login/register
-  const [confirmPassword, setConfirmPassword] = useState(''); // Confirm password for registration
-  const [isRegistering, setIsRegistering] = useState(false); // Toggle between login and register views
-  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number; isTrash?: boolean } | null>(null); // Context menu state with isTrash flag
-  const [searchQuery, setSearchQuery] = useState(''); // Search query for filtering notes
-  const [isTrashView, setIsTrashView] = useState(false); // Toggle between main notes and trash views
-  const [isSelectAllActive, setIsSelectAllActive] = useState(false); // Toggle for "Select All" in trash view
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [trashedNotes, setTrashedNotes] = useState<TrashedNote[]>([]);
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
+  const [newContent, setNewContent] = useState('');
+  const [originalContent, setOriginalContent] = useState<string>('');
+  const [currentTitle, setCurrentTitle] = useState('');
+  const [originalTitle, setOriginalTitle] = useState('');
+  const [isTitleManual, setIsTitleManual] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number; isTrash?: boolean } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isTrashView, setIsTrashView] = useState(false);
+  const [isSelectAllActive, setIsSelectAllActive] = useState(false);
 
-  // --- API Functions ---
-
-  // Fetch all active notes from the server
+  // Fetch active notes from the backend
   const fetchNotes = async (authToken: string) => {
     try {
       const response = await axios.get<Note[]>('https://localhost:3002/notes', {
@@ -60,7 +58,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Fetch all trashed notes from the server
+  // Fetch trashed notes from the backend
   const fetchTrashedNotes = async (authToken: string) => {
     try {
       const response = await axios.get<TrashedNote[]>('https://localhost:3002/trashed-notes', {
@@ -146,7 +144,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Move note to trash
+  // Move a note to trash
   const deleteNote = async (id: number) => {
     if (!token) return;
     try {
@@ -172,7 +170,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Restore note from trash to main notes
+  // Restore a note from trash
   const restoreNote = async (id: number) => {
     if (!token) return;
     try {
@@ -181,11 +179,9 @@ const App: React.FC = () => {
         {},
         { headers: { Authorization: token } }
       );
-      // Add restored note to notes list
       setNotes([...notes, response.data].sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       ));
-      // Remove from trashed notes
       setTrashedNotes(trashedNotes.filter((note) => note.id !== id));
     } catch (error) {
       const axiosError = error as AxiosError;
@@ -196,14 +192,13 @@ const App: React.FC = () => {
     }
   };
 
-  // Permanently delete note from trash
+  // Permanently delete a note from trash
   const permanentlyDeleteNote = async (id: number) => {
     if (!token) return;
     try {
       await axios.delete(`https://localhost:3002/trashed-notes/${id}`, {
         headers: { Authorization: token },
       });
-      // Remove from trashed notes
       setTrashedNotes(trashedNotes.filter((note) => note.id !== id));
     } catch (error) {
       const axiosError = error as AxiosError;
@@ -236,7 +231,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Logout user
+  // Handle user logout
   const logout = () => {
     setToken(null);
     localStorage.removeItem('token');
@@ -252,9 +247,7 @@ const App: React.FC = () => {
     setIsTrashView(false);
   };
 
-  // --- useEffect Hooks ---
-
-  // Load notes and trashed notes on initial render if token exists
+  // Load token and fetch notes on initial render
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
@@ -272,14 +265,14 @@ const App: React.FC = () => {
     }
   }, [newContent, isTitleManual]);
 
-  // Auto-add note when content is typed and no note is selected
+  // Add a new note when content is entered and no note is selected
   useEffect(() => {
     if (selectedNoteId === null && newContent.trim() && token) {
       addNote();
     }
   }, [newContent, token]);
 
-  // Autosave edited note after 2 seconds of inactivity
+  // Auto-save edits after a delay
   useEffect(() => {
     if (
       selectedNoteId !== null &&
@@ -294,8 +287,7 @@ const App: React.FC = () => {
     }
   }, [newContent, currentTitle, selectedNoteId, token, originalContent, originalTitle]);
 
-  // --- Filtering Logic ---
-
+  // Filter and sort notes based on search query
   const filteredNotes = notes
     .filter(
       (note) =>
@@ -304,6 +296,7 @@ const App: React.FC = () => {
     )
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
+  // Filter and sort trashed notes based on search query
   const filteredTrashedNotes = trashedNotes
     .filter(
       (note) =>
@@ -312,17 +305,17 @@ const App: React.FC = () => {
     )
     .sort((a, b) => new Date(b.trashed_at).getTime() - new Date(a.trashed_at).getTime());
 
-  // --- UI Rendering ---
-
   return (
     <div
       className="h-screen bg-gradient-to-br from-[#141414] to-[#1D1D1D] font-inter flex flex-col"
       onClick={() => setContextMenu(null)} // Close context menu on outside click
     >
+      {/* Load Inter font from Google Fonts */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
       />
+      {/* Custom scrollbar styles */}
       <style>
         {`
           .custom-scrollbar::-webkit-scrollbar {
@@ -345,7 +338,7 @@ const App: React.FC = () => {
         `}
       </style>
 
-      {/* Header */}
+      {/* Header with app title and logout button */}
       <header className="h-[30px] bg-transparent text-white p-4 flex justify-between items-center flex-shrink-0">
         <h1 className="text-xl font-bold">Notefied</h1>
         {token && (
@@ -358,12 +351,13 @@ const App: React.FC = () => {
         )}
       </header>
 
-      {/* Main Content */}
+      {/* Main content area */}
       <div className="flex-1 flex justify-center items-center px-4 overflow-hidden relative">
         {token ? (
           isTrashView ? (
-            // --- Trash View ---
+            // Trash view layout
             <div className="w-full max-w-[1640px] h-full flex flex-col items-center relative">
+              {/* Back button to return to main notes view */}
               <div className="absolute left-[40px] bg-transparent top-4 flex items-center space-x-4">
                 <button
                   onClick={() => setIsTrashView(false)}
@@ -376,9 +370,11 @@ const App: React.FC = () => {
                   />
                 </button>
               </div>
+              {/* Trash page title */}
               <div className="absolute left-[120px] top-5">
                 <h2 className="text-white text-[24px] font-bold">Bin</h2>
               </div>
+              {/* Action buttons: Select All, Restore, Delete */}
               <div className="absolute left-[110px] top-[52px] flex justify-start items-center space-x-6 mt-5">
                 <button
                   onClick={() => setIsSelectAllActive((prev) => !prev)}
@@ -395,6 +391,7 @@ const App: React.FC = () => {
                   Delete
                 </button>
               </div>
+              {/* Search bar for filtering trashed notes */}
               <div className="flex flex-col items-center w-full">
                 <input
                   type="text"
@@ -404,33 +401,39 @@ const App: React.FC = () => {
                   className="h-[35px] w-[300px] bg-[#252525] text-white text-[12px] px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-4"
                 />
               </div>
-              {/* Trashed notes list with context menu */}
-              <div className="w-[300px] flex-1 overflow-y-auto custom-scrollbar mt-4 mb-[60px]">
-                {filteredTrashedNotes.map((note) => (
-                  <div
-                    key={note.id}
-                    className="relative w-full h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] mb-3 cursor-pointer hover:bg-[#383838] transition-all duration-300"
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY, isTrash: true });
-                    }}
-                  >
-                    <div className="ml-[7px]">
-                      <strong className="text-white">{note.title}</strong>
-                      <p className="text-gray-400">{note.content.slice(0, 50)}...</p>
+              {/* Container for trashed note tiles */}
+              <div className="absolute left-[100px] top-[107px] w-[calc(100%-120px)] overflow-y-auto custom-scrollbar h-[calc(100%-127px)]">
+                {/* Flex container to arrange tiles horizontally in rows */}
+                <div className="flex flex-wrap gap-x-20 gap-y-[100px] mt-10">
+                  {filteredTrashedNotes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="relative w-[300px] h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] cursor-pointer hover:bg-[#383838] transition-all duration-300 flex-shrink-0" // Added 'relative' to make this the positioning context
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY, isTrash: true });
+                      }}
+                    >
+                      {/* Note title and truncated content */}
+                      <div className="ml-[7px]">
+                        <strong className="text-white text-sm">{note.title}</strong>
+                        <p className="text-gray-400 text-xs">{note.content.slice(0, 50)}...</p>
+                      </div>
+                      {/* Trashed timestamp, positioned within the tile */}
+                      <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
+                        Trashed: {new Date(note.trashed_at).toLocaleString()}
+                      </span>
                     </div>
-                    <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
-                      Trashed: {new Date(note.trashed_at).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
-            // --- Main Notes View ---
+            // Main notes view layout
             <div className="flex w-full max-w-[1640px] h-full">
               <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
                 <div className="flex flex-col h-full relative">
+                  {/* Search bar for active notes */}
                   <input
                     type="text"
                     placeholder="Search Notes"
@@ -438,6 +441,7 @@ const App: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
                   />
+                  {/* Filter buttons */}
                   <div className="h-[45px] w-full flex mt-[10px] flex justify-center items-center">
                     <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] hover:bg-[#383838]">
                       All
@@ -449,6 +453,7 @@ const App: React.FC = () => {
                       Projects
                     </button>
                   </div>
+                  {/* Active notes list */}
                   <div className="flex-1 overflow-y-auto custom-scrollbar mt-[10px] mb-[60px]">
                     {filteredNotes.map((note) => (
                       <div
@@ -467,6 +472,7 @@ const App: React.FC = () => {
                           setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY });
                         }}
                       >
+                        {/* Selection indicator */}
                         <div
                           className={`absolute left-1 top-[12px] h-[96px] bg-gradient-to-b from-[#2996FC] via-[#1238D4] to-[#592BFF] ${
                             note.id === selectedNoteId ? 'w-[4px]' : 'w-0'
@@ -484,6 +490,7 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                  {/* Trash and Add buttons */}
                   <div className="absolute bottom-[-3px] left-0 w-full flex justify-end pr-4 pb-4">
                     <button
                       onClick={() => setIsTrashView(true)}
@@ -507,6 +514,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
+              {/* Note editing area */}
               <div className="flex-1 p-4 mt-[45px] ml-[0px]">
                 <textarea
                   value={newContent}
@@ -515,13 +523,14 @@ const App: React.FC = () => {
                   className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
                 />
               </div>
+              {/* Right sidebar placeholder */}
               <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
                 <div className="w-full h-[40px] border border-gray-300"></div>
               </div>
             </div>
           )
         ) : (
-          // --- Login/Register View ---
+          // Login/Register form
           <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] flex justify-center items-center">
             <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-lg p-6 flex flex-col">
               <h2 className="text-2xl font-medium text-white mb-6 text-center">
@@ -594,15 +603,14 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Context Menu for Notes and Trash */}
+      {/* Context menu for notes */}
       {contextMenu && (
         <div
           className="absolute bg-[#1F1F1F] text-white rounded-[10px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] w-[120px] flex flex-col justify-center py-2"
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()} // Prevent closing on menu click
         >
           {contextMenu.isTrash ? (
-            // Trash context menu
             <>
               <button
                 onClick={() => {
@@ -624,7 +632,6 @@ const App: React.FC = () => {
               </button>
             </>
           ) : (
-            // Main notes context menu
             <>
               <button
                 onClick={() => {
