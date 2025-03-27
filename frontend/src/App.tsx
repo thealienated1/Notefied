@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
 import TrashIcon from './assets/icons/trash.svg';
 import PlusIcon from './assets/icons/plus.svg';
@@ -41,6 +41,38 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isTrashView, setIsTrashView] = useState(false);
   const [selectedTrashedNotes, setSelectedTrashedNotes] = useState<number[]>([]);
+
+  // Filter and sort notes based on search query (moved up)
+  const filteredNotes = notes
+    .filter(
+      (note) =>
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.content.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+  // Filter and sort trashed notes based on search query (moved up)
+  const filteredTrashedNotes = trashedNotes
+    .filter(
+      (note) =>
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.content.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.trashed_at).getTime() - new Date(a.trashed_at).getTime());
+
+  // Memoized event handlers for trash view
+  const handleBackToNotes = useCallback(() => {
+    setIsTrashView(false);
+    setSelectedTrashedNotes([]);
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedTrashedNotes.length === filteredTrashedNotes.length) {
+      setSelectedTrashedNotes([]);
+    } else {
+      setSelectedTrashedNotes(filteredTrashedNotes.map((note) => note.id));
+    }
+  }, [selectedTrashedNotes, filteredTrashedNotes]);
 
   // Fetch active notes from the backend
   const fetchNotes = async (authToken: string) => {
@@ -120,7 +152,7 @@ const App: React.FC = () => {
   };
 
   // Add a new note
-  const addNote = async () => {
+  const addNote = useCallback(async () => {
     if (!token || !newContent.trim()) return;
     const words = newContent.trim().split(/\s+/);
     const title = currentTitle.trim() || words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '');
@@ -142,7 +174,16 @@ const App: React.FC = () => {
       const axiosError = error as AxiosError;
       console.error('Add note error:', axiosError.response?.data || axiosError.message);
     }
-  };
+  }, [token, newContent, currentTitle, notes]);
+
+  const resetNoteState = useCallback(() => {
+    setSelectedNoteId(null);
+    setNewContent('');
+    setOriginalContent('');
+    setCurrentTitle('');
+    setOriginalTitle('');
+    setIsTitleManual(false);
+  }, []);
 
   // Move a note to trash
   const deleteNote = async (id: number) => {
@@ -153,14 +194,7 @@ const App: React.FC = () => {
       });
       setNotes(notes.filter((note) => note.id !== id));
       await fetchTrashedNotes(token);
-      if (selectedNoteId === id) {
-        setSelectedNoteId(null);
-        setNewContent('');
-        setOriginalContent('');
-        setCurrentTitle('');
-        setOriginalTitle('');
-        setIsTitleManual(false);
-      }
+      if (selectedNoteId === id) resetNoteState();
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Delete note error:', axiosError.response?.data || axiosError.message);
@@ -209,7 +243,7 @@ const App: React.FC = () => {
   };
 
   // Save edits to an existing note
-  const saveEdit = async () => {
+  const saveEdit = useCallback(async () => {
     if (!token || !newContent.trim() || selectedNoteId === null) return;
     try {
       const response = await axios.put<Note>(
@@ -229,7 +263,7 @@ const App: React.FC = () => {
       const axiosError = error as AxiosError;
       console.error('Update note error:', axiosError.response?.data || axiosError.message);
     }
-  };
+  }, [token, newContent, currentTitle, selectedNoteId, notes]);
 
   // Handle user logout
   const logout = () => {
@@ -237,12 +271,7 @@ const App: React.FC = () => {
     localStorage.removeItem('token');
     setNotes([]);
     setTrashedNotes([]);
-    setSelectedNoteId(null);
-    setNewContent('');
-    setOriginalContent('');
-    setCurrentTitle('');
-    setOriginalTitle('');
-    setIsTitleManual(false);
+    resetNoteState();
     setSearchQuery('');
     setIsTrashView(false);
     setSelectedTrashedNotes([]);
@@ -271,7 +300,7 @@ const App: React.FC = () => {
     if (selectedNoteId === null && newContent.trim() && token) {
       addNote();
     }
-  }, [newContent, token]);
+  }, [newContent, token, selectedNoteId, addNote]);
 
   // Auto-save edits after a delay
   useEffect(() => {
@@ -281,30 +310,10 @@ const App: React.FC = () => {
       token &&
       (newContent !== originalContent || currentTitle !== originalTitle)
     ) {
-      const timer = setTimeout(() => {
-        saveEdit();
-      }, 2000);
-      return () => clearTimeout(timer);
+      const timer = setTimeout(() => saveEdit(), 2000);
+      return () => clearTimeout(timer); // Cleanup on unmount or dependency change
     }
-  }, [newContent, currentTitle, selectedNoteId, token, originalContent, originalTitle]);
-
-  // Filter and sort notes based on search query
-  const filteredNotes = notes
-    .filter(
-      (note) =>
-        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.content.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-
-  // Filter and sort trashed notes based on search query
-  const filteredTrashedNotes = trashedNotes
-    .filter(
-      (note) =>
-        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.content.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort((a, b) => new Date(b.trashed_at).getTime() - new Date(a.trashed_at).getTime());
+  }, [newContent, currentTitle, selectedNoteId, token, originalContent, originalTitle, saveEdit]);
 
   return (
     <div
@@ -338,14 +347,15 @@ const App: React.FC = () => {
           }
           .note-tile .ring {
             display: none;
-            border: 2px solid #1F1F1F;
+            outline: 2px solid rgb(246, 246, 246); 
           }
           .note-tile:hover .ring,
           .note-tile.selected .ring {
+            outline: 1px solid rgb(254, 254, 254); 
             display: block;
           }
           .note-tile.selected .ring {
-            border-color: #677FF6;
+            background-color: #5062E7;
           }
         `}
       </style>
@@ -372,10 +382,7 @@ const App: React.FC = () => {
               {/* Back button to return to main notes view */}
               <div className="absolute left-[40px] bg-transparent top-4 flex items-center space-x-4">
                 <button
-                  onClick={() => {
-                    setIsTrashView(false);
-                    setSelectedTrashedNotes([]); // Clear selection when leaving trash view
-                  }}
+                  onClick={handleBackToNotes}
                   className="w-[45px] h-[45px] bg-transparent rounded-full flex items-center justify-center hover:text-[#5062E7] transition-all duration-200"
                 >
                   <img
@@ -392,13 +399,7 @@ const App: React.FC = () => {
               {/* Action buttons: Select All, Restore, Delete */}
               <div className="absolute left-[110px] top-[52px] flex justify-start items-center space-x-6 mt-5">
                 <button
-                  onClick={() => {
-                    if (selectedTrashedNotes.length === filteredTrashedNotes.length) {
-                      setSelectedTrashedNotes([]);
-                    } else {
-                      setSelectedTrashedNotes(filteredTrashedNotes.map((note) => note.id));
-                    }
-                  }}
+                  onClick={handleSelectAll}
                   className="w-[65px] h-[45px] bg-transparent text-white font-normal rounded-[25px] mr-10 transition-all duration-200 text-[12px] hover:text-[13px]"
                 >
                   Select All
@@ -444,7 +445,7 @@ const App: React.FC = () => {
                   {filteredTrashedNotes.map((note) => (
                     <div
                       key={note.id}
-                      className={`note-tile relative w-[300px] h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] cursor-pointer hover:bg-[#383838] transition-all duration-300 flex-shrink-0 ${
+                      className={`note-tile relative w-[300px] h-[120px] bg-[#1F1F1F] p-2 rounded-[15px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.6)] cursor-pointer hover:bg-[#383838] transition-all duration-300 flex-shrink-0 outline-none ${
                         selectedTrashedNotes.includes(note.id) ? 'selected' : ''
                       }`}
                       onClick={() => {
@@ -459,7 +460,7 @@ const App: React.FC = () => {
                         setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY, isTrash: true });
                       }}
                     >
-                      <div className="ring absolute top-2 left-2 w-[13px] h-[13px] rounded-full"></div>
+                      <div className="ring absolute top-4 right-4 w-[10px] h-[10px] rounded-full ;"></div>
                       <div className="ml-[7px]">
                         <strong className="text-white text-sm">{note.title}</strong>
                         <p className="text-gray-400 text-xs">{note.content.slice(0, 50)}...</p>
@@ -534,7 +535,7 @@ const App: React.FC = () => {
                     ))}
                   </div>
                   {/* Trash and Add buttons */}
-                  <div className="absolute bottom-[-3px] left-0 w-full flex justify-end pr-4 pb-4">
+                  <div className="absolute bottom-[-6px] left-0 w-full flex justify-end pr-4 pb-4">
                     <button
                       onClick={() => setIsTrashView(true)}
                       className="w-[45px] h-[45px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838] mr-6"
@@ -542,14 +543,7 @@ const App: React.FC = () => {
                       <img src={TrashIcon} alt="Trash" className="w-7 h-7" />
                     </button>
                     <button
-                      onClick={() => {
-                        setSelectedNoteId(null);
-                        setNewContent('');
-                        setOriginalContent('');
-                        setCurrentTitle('');
-                        setOriginalTitle('');
-                        setIsTitleManual(false);
-                      }}
+                      onClick={resetNoteState}
                       className="w-[45px] h-[45px] bg-[#1F1F1F] text-white rounded-full flex items-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] justify-center hover:bg-[#383838]"
                     >
                       <img src={PlusIcon} alt="Add" className="w-7 h-7" />
