@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios, { AxiosError } from 'axios';
 import TrashIcon from './assets/icons/trash.svg';
 import PlusIcon from './assets/icons/plus.svg';
@@ -14,8 +14,8 @@ interface Note {
 }
 
 interface TrashedNote extends Note {
-  trashed_at: string; // Timestamp when moved to trash
-  original_updated_at?: string; // Optional original updated_at from notes table
+  trashed_at: string;
+  original_updated_at?: string;
 }
 
 interface ErrorResponse {
@@ -41,8 +41,10 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isTrashView, setIsTrashView] = useState(false);
   const [selectedTrashedNotes, setSelectedTrashedNotes] = useState<number[]>([]);
+  const [tempDeletedNote, setTempDeletedNote] = useState<Note | null>(null); // Temporary storage for deleted note
+  const textareaRef = useRef<HTMLTextAreaElement>(null); // Ref for textarea to detect undo
 
-  // Filter and sort notes based on search query (moved up)
+  // Filter and sort notes based on search query
   const filteredNotes = notes
     .filter(
       (note) =>
@@ -51,7 +53,7 @@ const App: React.FC = () => {
     )
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
-  // Filter and sort trashed notes based on search query (moved up)
+  // Filter and sort trashed notes based on search query
   const filteredTrashedNotes = trashedNotes
     .filter(
       (note) =>
@@ -170,6 +172,7 @@ const App: React.FC = () => {
       setCurrentTitle(response.data.title);
       setOriginalTitle(response.data.title);
       setOriginalContent(newContent);
+      setTempDeletedNote(null); // Clear any temporary deletion
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Add note error:', axiosError.response?.data || axiosError.message);
@@ -183,6 +186,7 @@ const App: React.FC = () => {
     setCurrentTitle('');
     setOriginalTitle('');
     setIsTitleManual(false);
+    setTempDeletedNote(null); // Clear temporary deletion
   }, []);
 
   // Move a note to trash
@@ -244,11 +248,24 @@ const App: React.FC = () => {
 
   // Save edits to an existing note
   const saveEdit = useCallback(async () => {
-    if (!token || !newContent.trim() || selectedNoteId === null) return;
+    if (!token || selectedNoteId === null) return;
+
+    const contentToSave = newContent.trim();
+    const titleToSave = contentToSave === '' ? '' : currentTitle;
+
+    if (contentToSave === '' && tempDeletedNote) {
+      // Finalize temporary deletion if saved with empty content
+      setTempDeletedNote(null);
+      setSelectedNoteId(null);
+      setNewContent('');
+      setCurrentTitle('');
+      return;
+    }
+
     try {
       const response = await axios.put<Note>(
         `https://localhost:3002/notes/${selectedNoteId}`,
-        { title: currentTitle, content: newContent },
+        { title: titleToSave, content: contentToSave },
         { headers: { Authorization: token } }
       );
       const updatedNotes = notes.map((note) =>
@@ -257,13 +274,15 @@ const App: React.FC = () => {
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
       setNotes(updatedNotes);
-      setOriginalContent(newContent);
-      setOriginalTitle(currentTitle);
+      setOriginalContent(contentToSave);
+      setOriginalTitle(titleToSave);
+      setCurrentTitle(titleToSave);
+      setTempDeletedNote(null); // Clear temporary deletion after save
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Update note error:', axiosError.response?.data || axiosError.message);
     }
-  }, [token, newContent, currentTitle, selectedNoteId, notes]);
+  }, [token, newContent, currentTitle, selectedNoteId, notes, tempDeletedNote]);
 
   // Handle user logout
   const logout = () => {
@@ -287,11 +306,15 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Auto-generate title from content if not manually set
+  // Auto-generate title from content if not manually set, or clear it if content is empty
   useEffect(() => {
-    if (!isTitleManual && newContent.trim()) {
-      const words = newContent.trim().split(/\s+/);
-      setCurrentTitle(words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : ''));
+    if (!isTitleManual) {
+      if (newContent.trim() === '') {
+        setCurrentTitle('');
+      } else {
+        const words = newContent.trim().split(/\s+/);
+        setCurrentTitle(words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : ''));
+      }
     }
   }, [newContent, isTitleManual]);
 
@@ -302,30 +325,69 @@ const App: React.FC = () => {
     }
   }, [newContent, token, selectedNoteId, addNote]);
 
+  // Handle content changes and temporary deletion
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const content = e.target.value;
+    setNewContent(content);
+
+    if (content.trim() === '' && selectedNoteId !== null && !tempDeletedNote) {
+      const noteToDelete = notes.find((note) => note.id === selectedNoteId);
+      if (noteToDelete) {
+        setTempDeletedNote(noteToDelete); // Store in memory temporarily
+        setNotes(notes.filter((note) => note.id !== selectedNoteId)); // Remove from list
+        // Do not reset editor state, allowing undo to work
+      }
+    }
+  };
+
+  // Detect undo (Ctrl + Z) to restore the note
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'z' && tempDeletedNote) {
+        setTimeout(() => {
+          if (textarea.value.trim() !== '') {
+            setNotes((prevNotes) => [...prevNotes, tempDeletedNote].sort(
+              (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            ));
+            setSelectedNoteId(tempDeletedNote.id);
+            setNewContent(tempDeletedNote.content);
+            setCurrentTitle(tempDeletedNote.title);
+            setOriginalContent(tempDeletedNote.content);
+            setOriginalTitle(tempDeletedNote.title);
+            setTempDeletedNote(null); // Clear temporary storage
+          }
+        }, 0); // Delay to allow undo to update textarea value
+      }
+    };
+
+    textarea.addEventListener('keydown', handleKeyDown);
+    return () => textarea.removeEventListener('keydown', handleKeyDown);
+  }, [tempDeletedNote]);
+
   // Auto-save edits after a delay
   useEffect(() => {
     if (
       selectedNoteId !== null &&
-      newContent.trim() &&
       token &&
       (newContent !== originalContent || currentTitle !== originalTitle)
     ) {
       const timer = setTimeout(() => saveEdit(), 2000);
-      return () => clearTimeout(timer); // Cleanup on unmount or dependency change
+      return () => clearTimeout(timer);
     }
   }, [newContent, currentTitle, selectedNoteId, token, originalContent, originalTitle, saveEdit]);
 
   return (
     <div
       className="h-screen bg-gradient-to-br from-[#141414] to-[#1D1D1D] font-inter flex flex-col"
-      onClick={() => setContextMenu(null)} // Close context menu on outside click
+      onClick={() => setContextMenu(null)}
     >
-      {/* Load Inter font from Google Fonts */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
       />
-      {/* Custom scrollbar and ring styles */}
       <style>
         {`
           .custom-scrollbar::-webkit-scrollbar {
@@ -347,20 +409,44 @@ const App: React.FC = () => {
           }
           .note-tile .ring {
             display: none;
-            outline: 2px solid rgb(246, 246, 246); 
+            outline: 2px solid rgb(246, 246, 246);
           }
           .note-tile:hover .ring,
           .note-tile.selected .ring {
-            outline: 1px solid rgb(254, 254, 254); 
+            outline: 1px solid rgb(254, 254, 254);
             display: block;
           }
           .note-tile.selected .ring {
             background-color: #5062E7;
           }
+          .note-content {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-height: 3em;
+          }
+          textarea.custom-textarea::-webkit-scrollbar {
+            width: 8px;
+          }
+          textarea.custom-textarea::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          textarea.custom-textarea::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+          }
+          textarea.custom-textarea::-webkit-scrollbar-thumb:hover {
+            background: #555;
+          }
+          textarea.custom-textarea {
+            scrollbar-width: thin;
+            scrollbar-color: #888 transparent;
+          }
         `}
       </style>
 
-      {/* Header with app title and logout button */}
       <header className="h-[30px] bg-transparent text-white p-4 flex justify-between items-center flex-shrink-0">
         <h1 className="text-xl font-bold">Notefied</h1>
         {token && (
@@ -373,13 +459,10 @@ const App: React.FC = () => {
         )}
       </header>
 
-      {/* Main content area */}
       <div className="flex-1 flex justify-center items-center px-4 overflow-hidden relative">
         {token ? (
           isTrashView ? (
-            // Trash view layout
             <div className="w-full max-w-[1640px] h-full flex flex-col items-center relative">
-              {/* Back button to return to main notes view */}
               <div className="absolute left-[40px] bg-transparent top-4 flex items-center space-x-4">
                 <button
                   onClick={handleBackToNotes}
@@ -392,11 +475,9 @@ const App: React.FC = () => {
                   />
                 </button>
               </div>
-              {/* Trash page title */}
               <div className="absolute left-[120px] top-5">
                 <h2 className="text-white text-[24px] font-bold">Bin</h2>
               </div>
-              {/* Action buttons: Select All, Restore, Delete */}
               <div className="absolute left-[110px] top-[52px] flex justify-start items-center space-x-6 mt-5">
                 <button
                   onClick={handleSelectAll}
@@ -429,7 +510,6 @@ const App: React.FC = () => {
                   Delete
                 </button>
               </div>
-              {/* Search bar for filtering trashed notes */}
               <div className="flex flex-col items-center w-full">
                 <input
                   type="text"
@@ -439,7 +519,6 @@ const App: React.FC = () => {
                   className="h-[35px] w-[300px] bg-[#252525] text-white text-[12px] px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-4"
                 />
               </div>
-              {/* Container for trashed note tiles */}
               <div className="absolute left-[100px] top-[107px] w-[calc(100%-120px)] overflow-y-auto custom-scrollbar h-[calc(100%-127px)]">
                 <div className="flex flex-wrap gap-x-20 gap-y-[80px] mt-10">
                   {filteredTrashedNotes.map((note) => (
@@ -460,10 +539,10 @@ const App: React.FC = () => {
                         setContextMenu({ noteId: note.id, x: e.clientX, y: e.clientY, isTrash: true });
                       }}
                     >
-                      <div className="ring absolute top-4 right-4 w-[10px] h-[10px] rounded-full ;"></div>
+                      <div className="ring absolute top-4 right-4 w-[10px] h-[10px] rounded-full"></div>
                       <div className="ml-[7px]">
                         <strong className="text-white text-sm">{note.title}</strong>
-                        <p className="text-gray-400 text-xs">{note.content.slice(0, 50)}...</p>
+                        <p className="text-gray-400 text-xs note-content">{note.content}</p>
                       </div>
                       <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
                         Trashed: {new Date(note.trashed_at).toLocaleString()}
@@ -474,11 +553,9 @@ const App: React.FC = () => {
               </div>
             </div>
           ) : (
-            // Main notes view layout
             <div className="flex w-full max-w-[1640px] h-full">
               <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px]">
                 <div className="flex flex-col h-full relative">
-                  {/* Search bar for active notes */}
                   <input
                     type="text"
                     placeholder="Search Notes"
@@ -486,7 +563,6 @@ const App: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] focus:outline-none shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] placeholder-gray-400 mt-[10px]"
                   />
-                  {/* Filter buttons */}
                   <div className="h-[45px] w-full flex mt-[10px] flex justify-center items-center">
                     <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] font-normal rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] hover:bg-[#383838]">
                       All
@@ -498,7 +574,6 @@ const App: React.FC = () => {
                       Projects
                     </button>
                   </div>
-                  {/* Active notes list */}
                   <div className="flex-1 overflow-y-auto custom-scrollbar mt-[10px] mb-[60px]">
                     {filteredNotes.map((note) => (
                       <div
@@ -511,6 +586,7 @@ const App: React.FC = () => {
                           setCurrentTitle(note.title);
                           setOriginalContent(note.content);
                           setOriginalTitle(note.title);
+                          setTempDeletedNote(null); // Clear temporary deletion
                         }}
                         onContextMenu={(e) => {
                           e.preventDefault();
@@ -526,7 +602,7 @@ const App: React.FC = () => {
                           className={`transition-all duration-300 ${note.id === selectedNoteId ? 'ml-[7px]' : 'ml-0'}`}
                         >
                           <strong className="text-white">{note.title}</strong>
-                          <p className="text-gray-400">{note.content}</p>
+                          <p className="text-gray-400 note-content">{note.content}</p>
                         </div>
                         <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
                           {new Date(note.updated_at).toLocaleString()}
@@ -534,7 +610,6 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                  {/* Trash and Add buttons */}
                   <div className="absolute bottom-[-6px] left-0 w-full flex justify-end pr-4 pb-4">
                     <button
                       onClick={() => setIsTrashView(true)}
@@ -551,23 +626,21 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {/* Note editing area */}
-              <div className="flex-1 p-4 mt-[45px] ml-[0px]">
+              <div className="flex-1 p-4 mt-[45px] ml-[10px]">
                 <textarea
+                  ref={textareaRef}
                   value={newContent}
-                  onChange={(e) => setNewContent(e.target.value)}
+                  onChange={handleContentChange}
                   placeholder="Start typing your note..."
-                  className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none"
+                  className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none custom-textarea"
                 />
               </div>
-              {/* Right sidebar placeholder */}
               <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
                 <div className="w-full h-[40px] border border-gray-300"></div>
               </div>
             </div>
           )
         ) : (
-          // Login/Register form
           <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] flex justify-center items-center">
             <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-lg p-6 flex flex-col">
               <h2 className="text-2xl font-medium text-white mb-6 text-center">
@@ -640,12 +713,11 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Context menu for notes */}
       {contextMenu && (
         <div
           className="absolute bg-[#1F1F1F] text-white rounded-[10px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] w-[120px] flex flex-col justify-center py-2"
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()} // Prevent closing on menu click
+          onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.isTrash ? (
             <>
@@ -680,6 +752,7 @@ const App: React.FC = () => {
                     setOriginalContent(note.content);
                     setOriginalTitle(note.title);
                     setIsTitleManual(false);
+                    setTempDeletedNote(null); // Clear temporary deletion
                   }
                   setContextMenu(null);
                 }}
