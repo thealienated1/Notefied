@@ -49,6 +49,21 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState<string>('');
   const [registerError, setRegisterError] = useState<string>('');
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const time = date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const dateStr = date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    return `${time}, ${dateStr}`;
+  };
+
   // Filter and sort notes
   const filteredNotes = notes
     .filter(
@@ -530,7 +545,7 @@ const App: React.FC = () => {
                         <p className="text-gray-400 text-xs note-content">{note.content}</p>
                       </div>
                       <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
-                        Trashed: {new Date(note.trashed_at).toLocaleString()}
+                        Trashed: {formatDate(note.trashed_at)}
                       </span>
                     </div>
                   ))}
@@ -596,7 +611,7 @@ const App: React.FC = () => {
                         <p className="text-gray-400 note-content">{note.content}</p>
                       </div>
                       <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
-                        {new Date(note.updated_at).toLocaleString()}
+                        {formatDate(note.updated_at)}
                       </span>
                     </div>
                   ))}
