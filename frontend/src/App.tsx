@@ -26,7 +26,7 @@ interface ErrorResponse {
 const App: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [trashedNotes, setTrashedNotes] = useState<TrashedNote[]>([]);
-  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null); // Removed 'creating' state
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [newContent, setNewContent] = useState('');
   const [originalContent, setOriginalContent] = useState<string>('');
   const [currentTitle, setCurrentTitle] = useState('');
@@ -46,6 +46,8 @@ const App: React.FC = () => {
   const [notesToDeletePermanently, setNotesToDeletePermanently] = useState<number[]>([]);
   const [textareaKey, setTextareaKey] = useState(Date.now());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [loginError, setLoginError] = useState<string>('');
+  const [registerError, setRegisterError] = useState<string>('');
 
   // Filter and sort notes
   const filteredNotes = notes
@@ -112,18 +114,19 @@ const App: React.FC = () => {
       );
       setToken(response.data.token);
       localStorage.setItem('token', response.data.token);
+      setLoginError('');
       await fetchNotes(response.data.token);
       await fetchTrashedNotes(response.data.token);
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Login failed:', axiosError.response?.data || axiosError.message);
-      alert('Invalid credentials or server unavailable');
+      setLoginError('Incorrect Username or Password');
     }
   };
 
   const register = async () => {
     if (password !== confirmPassword) {
-      alert('Passwords do not match');
+      setRegisterError('Password Doesn\'t Match');
       return;
     }
     try {
@@ -133,7 +136,7 @@ const App: React.FC = () => {
         { headers: { 'Content-Type': 'application/json' } }
       );
       if (response.status === 201) {
-        alert('Registration successful! Please log in.');
+        setRegisterError('');
         setIsRegistering(false);
         setUsername('');
         setPassword('');
@@ -142,7 +145,12 @@ const App: React.FC = () => {
     } catch (error) {
       const axiosError = error as AxiosError<ErrorResponse>;
       console.error('Registration failed:', axiosError.response?.data || axiosError.message);
-      alert('Registration failed: ' + (axiosError.response?.data?.error || 'Server error'));
+      const errorMsg = axiosError.response?.data?.error;
+      if (errorMsg && errorMsg.toLowerCase().includes('username')) {
+        setRegisterError('Username Already Exists');
+      } else {
+        setRegisterError('Registration Failed');
+      }
     }
   };
 
@@ -292,6 +300,8 @@ const App: React.FC = () => {
     setConfirmPassword('');
     setIsRegistering(false);
     setShowDeleteConfirmModal(false);
+    setLoginError('');
+    setRegisterError('');
   };
 
   // Handle context menu positioning
@@ -335,16 +345,13 @@ const App: React.FC = () => {
     }
   }, [newContent, isTitleManual]);
 
-  // Consolidated autosave logic with debouncing
   useEffect(() => {
     if (!token || !newContent.trim()) return;
 
     const timer = setTimeout(() => {
       if (selectedNoteId === null) {
-        // Create a new note
         addNote();
       } else if (typeof selectedNoteId === 'number' && (newContent !== originalContent || currentTitle !== originalTitle)) {
-        // Update existing note
         saveEdit();
       }
     }, 2000);
@@ -619,7 +626,7 @@ const App: React.FC = () => {
                   value={newContent}
                   onChange={handleContentChange}
                   placeholder="Start typing..."
-                  className="w-full h-full p-2 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none custom-textarea"
+                  className="w-full h-full  pt-10 pl-10 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none custom-textarea"
                   disabled={!token}
                 />
               </div>
@@ -629,7 +636,7 @@ const App: React.FC = () => {
             </div>
           )
         ) : (
-          <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] flex justify-center items-center">
+          <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] flex justify-center items-center">
             <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] p-6 flex flex-col">
               <h2 className="text-2xl font-small text-white mb-6 text-center">
                 {isRegistering ? 'Sign-up' : 'Sign-in'}
@@ -638,31 +645,63 @@ const App: React.FC = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
-                className="w-full p-2 bg-[#121212] text-white text-sm rounded-[20px] mb-7 focus:outline-none"
+                className="w-full p-3 bg-[#121212] text-white text-xs rounded-[20px] mb-6 focus:outline-none"
+                onFocus={() => {
+                  setLoginError('');
+                  setRegisterError('');
+                }}
               />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full p-2 bg-[#121212] text-white text-sm rounded-[20px] mb-7 focus:outline-none"
-              />
-              {isRegistering && (
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm Password"
-                  className="w-full p-2 bg-[#121212] text-white text-sm rounded-[20px] mb-7 focus:outline-none"
-                />
-              )}
-              {!isRegistering && (
-                <div className="text-center text-sm text-gray-400 mb-4">Forgot password?</div>
+              {isRegistering ? (
+                <>
+                  <div className="relative mb-6">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      className="w-full p-3 bg-[#121212] text-white text-xs rounded-[20px] focus:outline-none"
+                      onFocus={() => setRegisterError('')}
+                    />
+                  </div>
+                  <div className="relative mb-6">
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm Password"
+                      className="w-full p-3 bg-[#121212] text-white text-xs rounded-[20px] focus:outline-none"
+                      onFocus={() => setRegisterError('')}
+                    />
+                    {registerError && (
+                      <div className="absolute left-0 bottom-[-20px] text-red-500 text-[10px]">{registerError}</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="relative mb-6">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      className="w-full p-3 bg-[#121212] text-white text-xs rounded-[20px] focus:outline-none"
+                      onFocus={() => {
+                        setLoginError('');
+                        setRegisterError('');
+                      }}
+                    />
+                    {loginError && (
+                      <div className="absolute left-0 bottom-[-20px] text-red-500 text-[10px]">{loginError}</div>
+                    )}
+                  </div>
+                  <div className="text-center text-sm text-gray-400 mb-6">Forgot password?</div>
+                </>
               )}
               <div className="flex justify-center mb-6">
                 <button
                   onClick={isRegistering ? register : login}
-                  className="w-[100px] h-[30px] bg-[#0072DB] text-white rounded-[30px] hover:bg-blue-700 text-xs mt-2"
+                  className="w-[100px] h-[30px] bg-[#0072DB] text-white rounded-[30px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] hover:bg-blue-700 text-xs mt-2"
                 >
                   {isRegistering ? 'Sign Up' : 'Sign In'}
                 </button>
@@ -673,7 +712,11 @@ const App: React.FC = () => {
                     Have an account?{' '}
                     <span
                       className="text-purple-400 cursor-pointer"
-                      onClick={() => setIsRegistering(false)}
+                      onClick={() => {
+                        setIsRegistering(false);
+                        setLoginError('');
+                        setRegisterError('');
+                      }}
                     >
                       Sign-in
                     </span>
@@ -683,7 +726,11 @@ const App: React.FC = () => {
                     Don’t have an account?{' '}
                     <span
                       className="text-purple-400 cursor-pointer"
-                      onClick={() => setIsRegistering(true)}
+                      onClick={() => {
+                        setIsRegistering(true);
+                        setLoginError('');
+                        setRegisterError('');
+                      }}
                     >
                       Sign-up
                     </span>
@@ -692,9 +739,9 @@ const App: React.FC = () => {
               </div>
               <div className="text-center text-sm text-gray-400 mb-6">or</div>
               <div className="flex justify-center space-x-5">
-                <button className="w-10 h-10 rounded-full border border-gray-600"></button>
-                <button className="w-10 h-10 rounded-full border border-gray-600"></button>
-                <button className="w-10 h-10 rounded-full border border-gray-600"></button>
+                <button className="w-10 h-10 rounded-full border border-gray-600 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)]"></button>
+                <button className="w-10 h-10 rounded-full border border-gray-600 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)]"></button>
+                <button className="w-10 h-10 rounded-full border border-gray-600 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)]"></button>
               </div>
             </div>
           </div>
