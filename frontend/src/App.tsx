@@ -46,21 +46,19 @@ const App: React.FC = () => {
   const [notesToDeletePermanently, setNotesToDeletePermanently] = useState<number[]>([]);
   const [textareaKey, setTextareaKey] = useState(Date.now());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const taskbarRef = useRef<HTMLDivElement>(null);
   const [loginError, setLoginError] = useState<string>('');
   const [registerError, setRegisterError] = useState<string>('');
 
+  // State for the draggable taskbar
+  const [taskbarPosition, setTaskbarPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const time = date.toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-    const dateStr = date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+    const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     return `${time}, ${dateStr}`;
   };
 
@@ -324,18 +322,86 @@ const App: React.FC = () => {
     e.preventDefault();
     const tile = e.currentTarget;
     const rect = tile.getBoundingClientRect();
-    
     const x = rect.right - 2;
     let y = rect.top + 10;
     const menuHeight = 100;
-    
     if (rect.top + menuHeight > window.innerHeight) {
       y = rect.top - menuHeight;
     }
-
     setContextMenu({ noteId, x, y, isTrash });
   };
 
+  // Set initial taskbar position 10px inside the textarea content area
+  useEffect(() => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const styles = window.getComputedStyle(textarea);
+      const paddingLeft = parseFloat(styles.paddingLeft); // 40px from pl-10
+      const paddingTop = parseFloat(styles.paddingTop);   // 40px from pt-10
+      setTaskbarPosition({
+        x: paddingLeft + 10, // 40px + 10px = 50px
+        y: paddingTop + 10,  // 40px + 10px = 50px
+      });
+    }
+  }, [textareaRef, token, isTrashView]);
+
+  // Handle mouse down to start dragging
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (taskbarRef.current) {
+      const rect = taskbarRef.current.getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+      setIsDragging(true);
+    }
+  };
+
+  // Handle dragging
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging && textareaRef.current && taskbarRef.current) {
+        e.preventDefault();
+        const textarea = textareaRef.current;
+        const parent = textarea.parentElement;
+        if (parent) {
+          const parentRect = parent.getBoundingClientRect();
+          const textareaStyles = window.getComputedStyle(textarea);
+          const paddingLeft = parseFloat(textareaStyles.paddingLeft); // 40px
+          const paddingTop = parseFloat(textareaStyles.paddingTop);   // 40px
+          const taskbarWidth = 450; // Fixed taskbar width
+          const taskbarHeight = 32; // Fixed taskbar height
+          const newX = e.clientX - dragOffset.x - parentRect.left;
+          const newY = e.clientY - dragOffset.y - parentRect.top;
+          const minX = paddingLeft + 5; // 10px inside from left
+          const minY = paddingTop + 5;  // 10px inside from top
+          const maxX = parentRect.width - taskbarWidth - paddingLeft; // Adjust for taskbar width
+          const maxY = parentRect.height - taskbarHeight - paddingTop; // Adjust for taskbar height
+          setTaskbarPosition({
+            x: Math.max(minX, Math.min(newX, maxX)),
+            y: Math.max(minY, Math.min(newY, maxY)),
+          });
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
+  // Existing useEffect hooks
   useEffect(() => {
     setTextareaKey(Date.now());
   }, []);
@@ -362,7 +428,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!token || !newContent.trim()) return;
-
     const timer = setTimeout(() => {
       if (selectedNoteId === null) {
         addNote();
@@ -370,14 +435,12 @@ const App: React.FC = () => {
         saveEdit();
       }
     }, 2000);
-
     return () => clearTimeout(timer);
   }, [newContent, currentTitle, selectedNoteId, token, originalContent, originalTitle, addNote, saveEdit]);
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const content = e.target.value;
     setNewContent(content);
-
     if (content.trim() === '' && typeof selectedNoteId === 'number' && !tempDeletedNote) {
       const noteToDelete = notes.find((note) => note.id === selectedNoteId);
       if (noteToDelete) {
@@ -634,16 +697,54 @@ const App: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 p-4 mt-[45px] ml-[10px]">
+              <div className="flex-1 p-4 mt-[45px] ml-[10px] relative">
                 <textarea
                   key={textareaKey}
                   ref={textareaRef}
                   value={newContent}
                   onChange={handleContentChange}
                   placeholder="Start typing..."
-                  className="w-full h-full  pt-10 pl-10 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none custom-textarea"
+                  className="w-full h-full pt-10 pl-10 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none custom-textarea"
                   disabled={!token}
+                  style={{ position: 'relative', zIndex: 1 }}
                 />
+                {token && !isTrashView && (
+                  <div
+                    ref={taskbarRef}
+                    style={{
+                      position: 'absolute',
+                      left: `${taskbarPosition.x}px`,
+                      top: `${taskbarPosition.y}px`,
+                      width: '450px',
+                      height: '32px',
+                      borderRadius: '15px',
+                      backgroundColor: '#252525',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-around',
+                      alignItems: 'center',
+                      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.4)',
+                      zIndex: 10,
+                      pointerEvents: 'auto',
+                      userSelect: 'none',
+                    }}
+                    onMouseDown={handleMouseDown}
+                  >
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          backgroundColor: '#505050',
+                          borderRadius: '5px',
+                          pointerEvents: 'auto',
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
                 <div className="w-full h-[40px] border border-gray-300"></div>
