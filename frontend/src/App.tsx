@@ -1,8 +1,18 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import axios, { AxiosError } from 'axios';
 import TrashIcon from './assets/icons/trash.svg';
 import PlusIcon from './assets/icons/plus.svg';
 import BackIcon from './assets/icons/back.svg';
+import FirstCapIcon from './assets/icons/FirstCap.svg';
+import AllCapIcon from './assets/icons/AllCap.svg';
+import TextColorIcon from './assets/icons/TextColor.svg';
+import HighlightColorIcon from './assets/icons/HighlightColor.svg';
+import BoldIcon from './assets/icons/Bold.svg';
+import ItalicIcon from './assets/icons/Italic.svg';
+import UnderlineIcon from './assets/icons/Underline.svg';
+import StrikeThroughIcon from './assets/icons/StrikeThrough.svg';
+import ChecklistIcon from './assets/icons/Checklist.svg';
+import BulletPointsIcon from './assets/icons/BulletPoint.svg';
 
 // Interfaces for TypeScript type definitions
 interface Note {
@@ -332,16 +342,31 @@ const App: React.FC = () => {
   };
 
   // Set initial taskbar position 10px inside the textarea content area
-  useEffect(() => {
-    if (textareaRef.current) {
+  useLayoutEffect(() => {
+    if (textareaRef.current && taskbarRef.current) {
       const textarea = textareaRef.current;
-      const styles = window.getComputedStyle(textarea);
-      const paddingLeft = parseFloat(styles.paddingLeft); // 40px from pl-10
-      const paddingTop = parseFloat(styles.paddingTop);   // 40px from pt-10
-      setTaskbarPosition({
-        x: paddingLeft + 10, // 40px + 10px = 50px
-        y: paddingTop + 10,  // 40px + 10px = 50px
-      });
+      const parent = textarea.parentElement;
+      if (parent) {
+        const parentRect = parent.getBoundingClientRect();
+        const styles = window.getComputedStyle(textarea);
+        const paddingLeft = parseFloat(styles.paddingLeft); // 40px from pl-10
+        const paddingTop = parseFloat(styles.paddingTop);   // 40px from pt-10
+        const taskbarWidth = 450; // Fixed taskbar width from style
+        const taskbarHeight = 32; // Fixed taskbar height from style
+        // Define boundaries consistent with dragging logic
+        const minX = paddingLeft + 5;
+        const minY = paddingTop + 5;
+        const maxX = parentRect.width - taskbarWidth - paddingLeft;
+        const maxY = parentRect.height - taskbarHeight - paddingTop;
+        // Desired initial position: 10px inside content area
+        const initialX = paddingLeft + 10;
+        const initialY = paddingTop + 10;
+        // Clamp the position to ensure it’s within bounds
+        setTaskbarPosition({
+          x: Math.max(minX, Math.min(initialX, maxX)),
+          y: Math.max(minY, Math.min(initialY, maxY)),
+        });
+      }
     }
   }, [textareaRef, token, isTrashView]);
 
@@ -492,7 +517,7 @@ const App: React.FC = () => {
           .custom-scrollbar::-webkit-scrollbar { width: 8px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background:_complex #555; }
           .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #888 transparent; }
           .note-tile .ring { display: none; outline: 2px solid #f6f6f6; }
           .note-tile:hover .ring, .note-tile.selected .ring { outline: 1px solid #fefefe; display: block; }
@@ -721,28 +746,27 @@ const App: React.FC = () => {
                       backgroundColor: '#252525',
                       cursor: 'pointer',
                       display: 'flex',
-                      justifyContent: 'space-around',
                       alignItems: 'center',
                       boxShadow: '0 4px 6px -1px rgba(0,0,0,0.4)',
                       zIndex: 10,
                       pointerEvents: 'auto',
                       userSelect: 'none',
+                      paddingLeft: '12px',
+                      gap: '12px',
                     }}
                     onMouseDown={handleMouseDown}
                   >
-                    {Array.from({ length: 10 }).map((_, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          backgroundColor: '#505050',
-                          borderRadius: '5px',
-                          pointerEvents: 'auto',
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                    ))}
+                    <img src={FirstCapIcon} alt="First Cap" style={{ width: '20px', height: '20px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={AllCapIcon} alt="All Cap" style={{ width: '20px', height: '20px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={TextColorIcon} alt="Text Color" style={{ width: '20px', height: '20px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={HighlightColorIcon} alt="Highlight Color" style={{ width: '22px', height: '22px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={BoldIcon} alt="Bold" style={{ width: '20px', height: '15px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={ItalicIcon} alt="Italic" style={{ width: '20px', height: '15px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={UnderlineIcon} alt="Underline" style={{ width: '20px', height: '18px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={StrikeThroughIcon} alt="Strike Through" style={{ width: '30px', height: '28px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={BulletPointsIcon} alt="Bullet Points" style={{ width: '20px', height: '16px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+                    <img src={ChecklistIcon} alt="Checklist" style={{ width: '20px', height: '16px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
+
                   </div>
                 )}
               </div>
