@@ -13,10 +13,11 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.14.0"
+    "pg": "^8.14.0",
+    "react-color": "^2.19.3"
   },
   "devDependencies": {
-    "@craco/craco": "^7.1.0",
+    "@craco/craco": "^5.9.0",
     "@svgr/webpack": "^8.1.0"
   }
 }

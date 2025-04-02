@@ -5,8 +5,6 @@ import PlusIcon from './assets/icons/plus.svg';
 import BackIcon from './assets/icons/back.svg';
 import FirstCapIcon from './assets/icons/FirstCap.svg';
 import AllCapIcon from './assets/icons/AllCap.svg';
-import TextColorIcon from './assets/icons/TextColor.svg';
-import HighlightColorIcon from './assets/icons/HighlightColor.svg';
 import BoldIcon from './assets/icons/Bold.svg';
 import ItalicIcon from './assets/icons/Italic.svg';
 import UnderlineIcon from './assets/icons/Underline.svg';
@@ -34,37 +32,46 @@ interface ErrorResponse {
 
 // Main App component
 const App: React.FC = () => {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [trashedNotes, setTrashedNotes] = useState<TrashedNote[]>([]);
-  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
-  const [newContent, setNewContent] = useState('');
-  const [originalContent, setOriginalContent] = useState<string>('');
-  const [currentTitle, setCurrentTitle] = useState('');
-  const [originalTitle, setOriginalTitle] = useState('');
-  const [isTitleManual, setIsTitleManual] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number; isTrash?: boolean } | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isTrashView, setIsTrashView] = useState(false);
-  const [selectedTrashedNotes, setSelectedTrashedNotes] = useState<number[]>([]);
-  const [tempDeletedNote, setTempDeletedNote] = useState<Note | null>(null);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
-  const [notesToDeletePermanently, setNotesToDeletePermanently] = useState<number[]>([]);
-  const [textareaKey, setTextareaKey] = useState(Date.now());
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const taskbarRef = useRef<HTMLDivElement>(null);
-  const [loginError, setLoginError] = useState<string>('');
-  const [registerError, setRegisterError] = useState<string>('');
+  // State for notes management
+  const [notes, setNotes] = useState<Note[]>([]); // Array of active notes
+  const [trashedNotes, setTrashedNotes] = useState<TrashedNote[]>([]); // Array of trashed notes
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null); // ID of currently selected note
+  const [newContent, setNewContent] = useState(''); // Content of the textarea
+  const [originalContent, setOriginalContent] = useState<string>(''); // Original content for comparison
+  const [currentTitle, setCurrentTitle] = useState(''); // Current title of the note
+  const [originalTitle, setOriginalTitle] = useState(''); // Original title for comparison
+  const [isTitleManual, setIsTitleManual] = useState(false); // Flag to indicate if title is manually set
 
-  // State for the draggable taskbar
-  const [taskbarPosition, setTaskbarPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  // Authentication state
+  const [token, setToken] = useState<string | null>(null); // Authentication token
+  const [username, setUsername] = useState(''); // Login/Signup username
+  const [password, setPassword] = useState(''); // Login/Signup password
+  const [confirmPassword, setConfirmPassword] = useState(''); // Confirm password for signup
+  const [isRegistering, setIsRegistering] = useState(false); // Toggle between login and signup
+  const [loginError, setLoginError] = useState<string>(''); // Login error message
+  const [registerError, setRegisterError] = useState<string>(''); // Registration error message
 
+  // UI interaction state
+  const [contextMenu, setContextMenu] = useState<{ noteId: number; x: number; y: number; isTrash?: boolean } | null>(null); // Context menu position and data
+  const [searchQuery, setSearchQuery] = useState(''); // Search query for filtering notes
+  const [isTrashView, setIsTrashView] = useState(false); // Toggle trash view
+  const [selectedTrashedNotes, setSelectedTrashedNotes] = useState<number[]>([]); // IDs of selected trashed notes
+  const [tempDeletedNote, setTempDeletedNote] = useState<Note | null>(null); // Temporarily deleted note for undo
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false); // Show permanent delete confirmation
+  const [notesToDeletePermanently, setNotesToDeletePermanently] = useState<number[]>([]); // IDs of notes to delete permanently
+
+  // Refs and textarea state
+  const [textareaKey, setTextareaKey] = useState(Date.now()); // Key to force textarea re-render
+  const textareaRef = useRef<HTMLTextAreaElement>(null); // Reference to textarea element
+  const taskbarRef = useRef<HTMLDivElement>(null); // Reference to taskbar element
+  const containerRef = useRef<HTMLDivElement>(null); // Reference to textarea's container
+
+  // Taskbar dragging state
+  const [taskbarPosition, setTaskbarPosition] = useState({ x: 0, y: 0 }); // Position of the draggable taskbar
+  const [isDragging, setIsDragging] = useState(false); // Flag for dragging state
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 }); // Offset for dragging calculations
+
+  // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -72,7 +79,7 @@ const App: React.FC = () => {
     return `${time}, ${dateStr}`;
   };
 
-  // Filter and sort notes
+  // Filter and sort notes based on search query
   const filteredNotes = notes
     .filter(
       (note) =>
@@ -89,7 +96,7 @@ const App: React.FC = () => {
     )
     .sort((a, b) => new Date(b.trashed_at).getTime() - new Date(a.trashed_at).getTime());
 
-  // Utility functions
+  // Utility functions for trash view
   const handleBackToNotes = useCallback(() => {
     setIsTrashView(false);
     setSelectedTrashedNotes([]);
@@ -104,6 +111,7 @@ const App: React.FC = () => {
     }
   }, [selectedTrashedNotes, filteredTrashedNotes]);
 
+  // Fetch notes from the server
   const fetchNotes = async (authToken: string) => {
     try {
       const response = await axios.get<Note[]>('https://localhost:3002/notes', {
@@ -116,6 +124,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Fetch trashed notes from the server
   const fetchTrashedNotes = async (authToken: string) => {
     try {
       const response = await axios.get<TrashedNote[]>('https://localhost:3002/trashed-notes', {
@@ -128,6 +137,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle user login
   const login = async () => {
     try {
       const response = await axios.post<{ token: string }>(
@@ -147,9 +157,10 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle user registration
   const register = async () => {
     if (password !== confirmPassword) {
-      setRegisterError('Password Doesn\'t Match');
+      setRegisterError("Password Doesn't Match");
       return;
     }
     try {
@@ -177,6 +188,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Add a new note
   const addNote = useCallback(async () => {
     if (!token || !newContent.trim()) return;
     const words = newContent.trim().split(/\s+/);
@@ -203,6 +215,7 @@ const App: React.FC = () => {
     }
   }, [token, newContent, currentTitle, notes]);
 
+  // Reset note-related state
   const resetNoteState = useCallback(() => {
     setSelectedNoteId(null);
     setNewContent('');
@@ -213,6 +226,7 @@ const App: React.FC = () => {
     setTempDeletedNote(null);
   }, []);
 
+  // Delete a note (move to trash)
   const deleteNote = async (id: number) => {
     if (!token) return;
     try {
@@ -231,6 +245,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Restore a note from trash
   const restoreNote = async (id: number): Promise<Note | null> => {
     if (!token) return null;
     try {
@@ -250,18 +265,19 @@ const App: React.FC = () => {
     }
   };
 
+  // Permanently delete notes from trash
   const executePermanentDeletion = async () => {
     if (!token || notesToDeletePermanently.length === 0) return;
     try {
       await Promise.all(
-        notesToDeletePermanently.map(id =>
+        notesToDeletePermanently.map((id) =>
           axios.delete(`https://localhost:3002/trashed-notes/${id}`, {
             headers: { Authorization: token },
           })
         )
       );
-      setTrashedNotes(prev => prev.filter(note => !notesToDeletePermanently.includes(note.id)));
-      setSelectedTrashedNotes(prev => prev.filter(id => !notesToDeletePermanently.includes(id)));
+      setTrashedNotes((prev) => prev.filter((note) => !notesToDeletePermanently.includes(note.id)));
+      setSelectedTrashedNotes((prev) => prev.filter((id) => !notesToDeletePermanently.includes(id)));
     } catch (error) {
       const axiosError = error as AxiosError;
       console.error('Permanent delete error:', axiosError.response?.data || axiosError.message);
@@ -270,12 +286,17 @@ const App: React.FC = () => {
     }
   };
 
-  const triggerPermanentDeleteConfirmation = useCallback((ids: number[]) => {
-    if (ids.length === 0) return;
-    setNotesToDeletePermanently(ids);
-    setShowDeleteConfirmModal(true);
-  }, []);
+  // Trigger confirmation for permanent deletion
+  const triggerPermanentDeleteConfirmation = useCallback(
+    (ids: number[]) => {
+      if (ids.length === 0) return;
+      setNotesToDeletePermanently(ids);
+      setShowDeleteConfirmModal(true);
+    },
+    []
+  );
 
+  // Save edits to an existing note
   const saveEdit = useCallback(async () => {
     if (!token || typeof selectedNoteId !== 'number') return;
     const contentToSave = newContent.trim();
@@ -293,11 +314,9 @@ const App: React.FC = () => {
         { title: titleToSave, content: contentToSave },
         { headers: { Authorization: token } }
       );
-      const updatedNotes = notes.map((note) =>
-        note.id === selectedNoteId ? response.data : note
-      ).sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      );
+      const updatedNotes = notes
+        .map((note) => (note.id === selectedNoteId ? response.data : note))
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
       setNotes(updatedNotes);
       setOriginalContent(contentToSave);
       setOriginalTitle(titleToSave);
@@ -309,6 +328,7 @@ const App: React.FC = () => {
     }
   }, [token, newContent, currentTitle, selectedNoteId, notes, tempDeletedNote]);
 
+  // Logout user and clear state
   const logout = () => {
     setToken(null);
     localStorage.removeItem('token');
@@ -341,36 +361,45 @@ const App: React.FC = () => {
     setContextMenu({ noteId, x, y, isTrash });
   };
 
-  // Set initial taskbar position 10px inside the textarea content area
+  // Set initial taskbar position to top-right corner inside textarea's container
   useLayoutEffect(() => {
-    if (textareaRef.current && taskbarRef.current) {
-      const textarea = textareaRef.current;
-      const parent = textarea.parentElement;
-      if (parent) {
-        const parentRect = parent.getBoundingClientRect();
-        const styles = window.getComputedStyle(textarea);
-        const paddingLeft = parseFloat(styles.paddingLeft); // 40px from pl-10
-        const paddingTop = parseFloat(styles.paddingTop);   // 40px from pt-10
-        const taskbarWidth = 450; // Fixed taskbar width from style
-        const taskbarHeight = 32; // Fixed taskbar height from style
-        // Define boundaries consistent with dragging logic
-        const minX = paddingLeft + 5;
-        const minY = paddingTop + 5;
-        const maxX = parentRect.width - taskbarWidth - paddingLeft;
-        const maxY = parentRect.height - taskbarHeight - paddingTop;
-        // Desired initial position: 10px inside content area
-        const initialX = paddingLeft + 10;
-        const initialY = paddingTop + 10;
-        // Clamp the position to ensure it’s within bounds
+    const updateTaskbarPosition = () => {
+      if (containerRef.current && taskbarRef.current && token && !isTrashView) {
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const styles = window.getComputedStyle(container);
+        const paddingLeft = parseFloat(styles.paddingLeft);
+        const paddingTop = parseFloat(styles.paddingTop);
+        const paddingRight = parseFloat(styles.paddingRight);
+        const paddingBottom = parseFloat(styles.paddingBottom);
+        const taskbarWidth = 374;
+        const taskbarHeight = 32;
+        const boundaryOffset = 5;
+
+        const minX = boundaryOffset;
+        const minY = boundaryOffset;
+        const maxX = containerRect.width - taskbarWidth - paddingRight - boundaryOffset;
+        const maxY = containerRect.height - taskbarHeight - paddingBottom - boundaryOffset;
+
+        const initialX = maxX;
+        const initialY = minY;
+
         setTaskbarPosition({
           x: Math.max(minX, Math.min(initialX, maxX)),
           y: Math.max(minY, Math.min(initialY, maxY)),
         });
       }
-    }
-  }, [textareaRef, token, isTrashView]);
+    };
 
-  // Handle mouse down to start dragging
+    updateTaskbarPosition();
+    window.addEventListener('resize', updateTaskbarPosition);
+
+    return () => {
+      window.removeEventListener('resize', updateTaskbarPosition);
+    };
+  }, [token, isTrashView]);
+
+  // Handle mouse down to start dragging the taskbar
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (taskbarRef.current) {
@@ -383,31 +412,34 @@ const App: React.FC = () => {
     }
   };
 
-  // Handle dragging
+  // Handle taskbar dragging
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging && textareaRef.current && taskbarRef.current) {
+      if (isDragging && containerRef.current && taskbarRef.current) {
         e.preventDefault();
-        const textarea = textareaRef.current;
-        const parent = textarea.parentElement;
-        if (parent) {
-          const parentRect = parent.getBoundingClientRect();
-          const textareaStyles = window.getComputedStyle(textarea);
-          const paddingLeft = parseFloat(textareaStyles.paddingLeft); // 40px
-          const paddingTop = parseFloat(textareaStyles.paddingTop);   // 40px
-          const taskbarWidth = 450; // Fixed taskbar width
-          const taskbarHeight = 32; // Fixed taskbar height
-          const newX = e.clientX - dragOffset.x - parentRect.left;
-          const newY = e.clientY - dragOffset.y - parentRect.top;
-          const minX = paddingLeft + 5; // 10px inside from left
-          const minY = paddingTop + 5;  // 10px inside from top
-          const maxX = parentRect.width - taskbarWidth - paddingLeft; // Adjust for taskbar width
-          const maxY = parentRect.height - taskbarHeight - paddingTop; // Adjust for taskbar height
-          setTaskbarPosition({
-            x: Math.max(minX, Math.min(newX, maxX)),
-            y: Math.max(minY, Math.min(newY, maxY)),
-          });
-        }
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const styles = window.getComputedStyle(container);
+        const paddingLeft = parseFloat(styles.paddingLeft);
+        const paddingTop = parseFloat(styles.paddingTop);
+        const paddingRight = parseFloat(styles.paddingRight);
+        const paddingBottom = parseFloat(styles.paddingBottom);
+        const taskbarWidth = 375;
+        const taskbarHeight = 32;
+        const boundaryOffset = 10;
+
+        const minX = boundaryOffset;
+        const minY = boundaryOffset;
+        const maxX = containerRect.width - taskbarWidth - paddingRight - boundaryOffset;
+        const maxY = containerRect.height - taskbarHeight - paddingBottom - boundaryOffset;
+
+        const newX = e.clientX - dragOffset.x - containerRect.left;
+        const newY = e.clientY - dragOffset.y - containerRect.top;
+
+        setTaskbarPosition({
+          x: Math.max(minX, Math.min(newX, maxX)),
+          y: Math.max(minY, Math.min(newY, maxY)),
+        });
       }
     };
 
@@ -426,11 +458,12 @@ const App: React.FC = () => {
     };
   }, [isDragging, dragOffset]);
 
-  // Existing useEffect hooks
+  // Reset textarea key on mount
   useEffect(() => {
     setTextareaKey(Date.now());
   }, []);
 
+  // Check for stored token on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
@@ -440,6 +473,7 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Auto-generate title from content if not manually set
   useEffect(() => {
     if (!isTitleManual) {
       if (newContent.trim() === '') {
@@ -451,6 +485,7 @@ const App: React.FC = () => {
     }
   }, [newContent, isTitleManual]);
 
+  // Auto-save note changes after 2 seconds
   useEffect(() => {
     if (!token || !newContent.trim()) return;
     const timer = setTimeout(() => {
@@ -463,6 +498,7 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [newContent, currentTitle, selectedNoteId, token, originalContent, originalTitle, addNote, saveEdit]);
 
+  // Handle textarea content changes
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const content = e.target.value;
     setNewContent(content);
@@ -478,15 +514,18 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle undo (Ctrl+Z) for temporarily deleted notes
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea || !tempDeletedNote) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'z') {
         e.preventDefault();
-        setNotes((prevNotes) => [...prevNotes, tempDeletedNote].sort(
-          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        ));
+        setNotes((prevNotes) =>
+          [...prevNotes, tempDeletedNote].sort(
+            (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+          )
+        );
         setSelectedNoteId(tempDeletedNote.id);
         setNewContent(tempDeletedNote.content);
         setCurrentTitle(tempDeletedNote.title);
@@ -504,20 +543,23 @@ const App: React.FC = () => {
   }, [tempDeletedNote]);
 
   return (
+    // Main app container with gradient background
     <div
       className="h-screen bg-gradient-to-br from-[#141414] to-[#1D1D1D] font-inter flex flex-col text-gray-200"
       onClick={() => setContextMenu(null)}
     >
+      {/* Import Inter font */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
       />
+      {/* Custom CSS styles */}
       <style>
         {`
           .custom-scrollbar::-webkit-scrollbar { width: 8px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background:_complex #555; }
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
           .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #888 transparent; }
           .note-tile .ring { display: none; outline: 2px solid #f6f6f6; }
           .note-tile:hover .ring, .note-tile.selected .ring { outline: 1px solid #fefefe; display: block; }
@@ -528,9 +570,11 @@ const App: React.FC = () => {
           textarea.custom-textarea::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
           textarea.custom-textarea::-webkit-scrollbar-thumb:hover { background: #555; }
           textarea.custom-textarea { scrollbar-width: thin; scrollbar-color: #888 transparent; }
+          select.no-arrow { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
         `}
       </style>
 
+      {/* Header with app title and logout button */}
       <header className="h-[30px] bg-transparent text-white p-4 flex justify-between items-center flex-shrink-0">
         <h1 className="text-xl font-bold">Notefied</h1>
         {token && (
@@ -543,10 +587,13 @@ const App: React.FC = () => {
         )}
       </header>
 
+      {/* Main content area */}
       <div className="flex-1 flex justify-center items-center px-4 overflow-hidden relative">
         {token ? (
           isTrashView ? (
+            // Trash view layout
             <div className="w-full max-w-[1640px] h-full flex flex-col items-center relative">
+              {/* Back button */}
               <div className="absolute left-[40px] bg-transparent top-4">
                 <button
                   onClick={handleBackToNotes}
@@ -559,9 +606,11 @@ const App: React.FC = () => {
                   />
                 </button>
               </div>
+              {/* Trash title */}
               <div className="absolute left-[120px] top-5">
                 <h2 className="text-white text-[24px] font-bold">Bin</h2>
               </div>
+              {/* Trash action buttons */}
               <div className="absolute left-[110px] top-[52px] flex items-center space-x-6 mt-5">
                 <button
                   onClick={handleSelectAll}
@@ -572,13 +621,15 @@ const App: React.FC = () => {
                 <button
                   disabled={!selectedTrashedNotes.length}
                   onClick={async () => {
-                    const restoredNotes = await Promise.all(selectedTrashedNotes.map(id => restoreNote(id)));
+                    const restoredNotes = await Promise.all(selectedTrashedNotes.map((id) => restoreNote(id)));
                     const validRestoredNotes = restoredNotes.filter((note): note is Note => note !== null);
                     if (validRestoredNotes.length > 0) {
-                      setNotes(prev => [...prev, ...validRestoredNotes].sort(
-                        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-                      ));
-                      setTrashedNotes(prev => prev.filter(note => !selectedTrashedNotes.includes(note.id)));
+                      setNotes((prev) =>
+                        [...prev, ...validRestoredNotes].sort(
+                          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                        )
+                      );
+                      setTrashedNotes((prev) => prev.filter((note) => !selectedTrashedNotes.includes(note.id)));
                       setSelectedTrashedNotes([]);
                     }
                   }}
@@ -598,6 +649,7 @@ const App: React.FC = () => {
                   Delete
                 </button>
               </div>
+              {/* Search bar for trash */}
               <div className="flex flex-col items-center w-full">
                 <input
                   type="text"
@@ -607,6 +659,7 @@ const App: React.FC = () => {
                   className="h-[35px] w-[300px] bg-[#252525] text-white text-[12px] px-4 rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:outline-none focus:ring-[0.5px] focus:ring-[#5062E7] mt-4"
                 />
               </div>
+              {/* Trashed notes list */}
               <div className="absolute left-[100px] top-[107px] w-[calc(100%-120px)] h-[calc(100%-127px)] overflow-y-auto custom-scrollbar">
                 <div className="flex flex-wrap gap-x-20 gap-y-[80px] mt-10">
                   {!filteredTrashedNotes.length && (
@@ -620,9 +673,7 @@ const App: React.FC = () => {
                       }`}
                       onClick={() =>
                         setSelectedTrashedNotes((prev) =>
-                          prev.includes(note.id)
-                            ? prev.filter((id) => id !== note.id)
-                            : [...prev, note.id]
+                          prev.includes(note.id) ? prev.filter((id) => id !== note.id) : [...prev, note.id]
                         )
                       }
                       onContextMenu={(e) => handleContextMenu(e, note.id, true)}
@@ -641,9 +692,12 @@ const App: React.FC = () => {
               </div>
             </div>
           ) : (
+            // Main notes view layout
             <div className="flex w-full max-w-[1640px] h-full">
-              <div className="w-[300px] flex flex-col flex-shrink-0 mr-[-10px] h-full relative">
+              {/* Sidebar with notes list */}
+              <div className="w-[300px] flex flex-col flex-shrink-0 h-full relative ">
                 <div className="flex-shrink-0">
+                  {/* Search bar for notes */}
                   <input
                     type="text"
                     placeholder="Search Notes"
@@ -651,6 +705,7 @@ const App: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="h-[35px] w-full bg-[#252525] text-white px-4 rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:outline-none focus:ring-[0.5px] focus:ring-[#5062E7] transition-all duration-300 mt-[10px]"
                   />
+                  {/* Filter buttons */}
                   <div className="h-[45px] w-full flex mt-[10px] justify-center items-center">
                     <button className="w-[45px] h-[45px] bg-[#1F1F1F] text-white text-[10px] rounded-[25px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] focus:ring-[0.5px] focus:ring-[#5062E7] hover:bg-[#383838] transition-all duration-300">
                       All
@@ -663,6 +718,7 @@ const App: React.FC = () => {
                     </button>
                   </div>
                 </div>
+                {/* Notes list */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar mt-[10px] pb-20 pr-1">
                   {!filteredNotes.length && !tempDeletedNote && (
                     <p className="text-center text-gray-500 mt-10">No notes yet.</p>
@@ -704,6 +760,7 @@ const App: React.FC = () => {
                     </div>
                   ))}
                 </div>
+                {/* Bottom action buttons */}
                 <div className="absolute bottom-[5px] left-0 right-2 h-18 flex items-center justify-end pr-4 z-10 backdrop-blur-sm rounded-[30px]">
                   <button
                     onClick={() => {
@@ -722,60 +779,125 @@ const App: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 p-4 mt-[45px] ml-[10px] relative">
-                <textarea
-                  key={textareaKey}
-                  ref={textareaRef}
-                  value={newContent}
-                  onChange={handleContentChange}
-                  placeholder="Start typing..."
-                  className="w-full h-full pt-10 pl-10 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none custom-textarea"
-                  disabled={!token}
-                  style={{ position: 'relative', zIndex: 1 }}
-                />
-                {token && !isTrashView && (
-                  <div
-                    ref={taskbarRef}
-                    style={{
-                      position: 'absolute',
-                      left: `${taskbarPosition.x}px`,
-                      top: `${taskbarPosition.y}px`,
-                      width: '450px',
-                      height: '32px',
-                      borderRadius: '15px',
-                      backgroundColor: '#252525',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.4)',
-                      zIndex: 10,
-                      pointerEvents: 'auto',
-                      userSelect: 'none',
-                      paddingLeft: '12px',
-                      gap: '12px',
-                    }}
-                    onMouseDown={handleMouseDown}
-                  >
-                    <img src={FirstCapIcon} alt="First Cap" style={{ width: '20px', height: '20px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={AllCapIcon} alt="All Cap" style={{ width: '20px', height: '20px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={TextColorIcon} alt="Text Color" style={{ width: '20px', height: '20px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={HighlightColorIcon} alt="Highlight Color" style={{ width: '22px', height: '22px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={BoldIcon} alt="Bold" style={{ width: '20px', height: '15px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={ItalicIcon} alt="Italic" style={{ width: '20px', height: '15px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={UnderlineIcon} alt="Underline" style={{ width: '20px', height: '18px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={StrikeThroughIcon} alt="Strike Through" style={{ width: '30px', height: '28px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={BulletPointsIcon} alt="Bullet Points" style={{ width: '20px', height: '16px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-                    <img src={ChecklistIcon} alt="Checklist" style={{ width: '20px', height: '16px', pointerEvents: 'auto' }} onMouseDown={(e) => e.stopPropagation()} />
-
-                  </div>
-                )}
+              {/* Right section with textarea and future buttons */}
+              <div className="flex-1 flex flex-col ml-[5px]">
+                {/* Empty container for future buttons, matching the height of search bar + filter buttons */}
+                <div className="h-[55px] w-full flex-shrink-0">
+                  {/* Placeholder for future buttons */}
+                </div>
+                {/* Textarea container */}
+                <div ref={containerRef} className="flex-1 relative">
+                  <textarea
+                    key={textareaKey}
+                    ref={textareaRef}
+                    value={newContent}
+                    onChange={handleContentChange}
+                    placeholder="Start typing..."
+                    className="w-full h-full pt-10 pl-10 bg-gradient-to-b from-[#191919] to-[#141414] border border-[#5062E7] rounded-[15px] text-white focus:border-[#5062E7] focus:outline-none resize-none custom-textarea"
+                    disabled={!token}
+                    style={{ position: 'relative', zIndex: 1 }}
+                  />
+                  {/* Draggable taskbar */}
+                  {token && !isTrashView && (
+                    <div
+                      ref={taskbarRef}
+                      style={{
+                        position: 'absolute',
+                        left: `${taskbarPosition.x}px`,
+                        top: `${taskbarPosition.y}px`,
+                        width: '374px',
+                        height: '32px',
+                        borderRadius: '15px',
+                        backgroundColor: '#252525',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.4)',
+                        zIndex: 10,
+                        pointerEvents: 'auto',
+                        userSelect: 'none',
+                        paddingLeft: '25px',
+                        gap: '15px',
+                      }}
+                      onMouseDown={handleMouseDown}
+                    >
+                      <img
+                        src={FirstCapIcon}
+                        alt="First Cap"
+                        style={{ width: '25px', height: '25px', pointerEvents: 'auto' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <img
+                        src={AllCapIcon}
+                        alt="All Cap"
+                        style={{ width: '25px', height: '25px', pointerEvents: 'auto' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <img
+                        src={BoldIcon}
+                        alt="Bold"
+                        style={{ width: '20px', height: '15px', pointerEvents: 'auto' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <img
+                        src={ItalicIcon}
+                        alt="Italic"
+                        style={{ width: '20px', height: '15px', pointerEvents: 'auto' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <img
+                        src={UnderlineIcon}
+                        alt="Underline"
+                        style={{ width: '25px', height: '15px', pointerEvents: 'auto' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <img
+                        src={StrikeThroughIcon}
+                        alt="Strike Through"
+                        style={{ width: '30px', height: '18px', pointerEvents: 'auto' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <img
+                        src={BulletPointsIcon}
+                        alt="Bullet Points"
+                        style={{ width: '18px', height: '18px', pointerEvents: 'auto'  }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <img
+                        src={ChecklistIcon}
+                        alt="Checklist"
+                        style={{ width: '18px', height: '18px', pointerEvents: 'auto' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <select
+                        className="no-arrow"
+                        style={{
+                          width: '28px',
+                          height: '22px',
+                          backgroundColor: '#171717',
+                          borderRadius: '6px',
+                          pointerEvents: 'auto',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          outline: 'none',
+                          cursor: 'pointer',
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {/* Empty dropdown; add options later as needed */}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
+              {/* Right sidebar */}
               <div className="w-[250px] h-[780px] bg-gradient-to-b from-[#191919] to-[#141414] p-2 flex-shrink-0 mt-[8px]">
                 <div className="w-full h-[40px] border border-gray-300"></div>
               </div>
             </div>
           )
         ) : (
+          // Login/Signup form
           <div className="w-[440px] h-[536px] bg-[#242424] rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] flex justify-center items-center">
             <div className="w-[400px] h-[500px] bg-[#191919] rounded-[20px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)] p-6 flex flex-col">
               <h2 className="text-2xl font-small text-white mb-6 text-center">
@@ -888,6 +1010,7 @@ const App: React.FC = () => {
         )}
       </div>
 
+      {/* Context menu */}
       {contextMenu && (
         <div
           className="absolute bg-[#1F1F1F] text-white rounded-[10px] shadow-xl w-[120px] flex flex-col py-2 z-50 transition-all duration-300"
@@ -900,11 +1023,13 @@ const App: React.FC = () => {
                 onClick={async () => {
                   const restoredNote = await restoreNote(contextMenu.noteId);
                   if (restoredNote) {
-                    setNotes(prev => [...prev, restoredNote].sort(
-                      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-                    ));
-                    setTrashedNotes(prev => prev.filter(note => note.id !== contextMenu.noteId));
-                    setSelectedTrashedNotes(prev => prev.filter(id => id !== contextMenu.noteId));
+                    setNotes((prev) =>
+                      [...prev, restoredNote].sort(
+                        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                      )
+                    );
+                    setTrashedNotes((prev) => prev.filter((note) => note.id !== contextMenu.noteId));
+                    setSelectedTrashedNotes((prev) => prev.filter((id) => id !== contextMenu.noteId));
                   }
                   setContextMenu(null);
                 }}
@@ -965,6 +1090,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Permanent delete confirmation modal */}
       {showDeleteConfirmModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
           <div className="bg-[#1F1F1F] rounded-[20px] w-[260px] h-[130px] p-4 flex flex-col items-center justify-between shadow-[0_4px_6px_-1px_rgba(0,0,0,0.4)]">
