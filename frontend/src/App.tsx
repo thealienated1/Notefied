@@ -372,7 +372,7 @@ const App: React.FC = () => {
         const paddingTop = parseFloat(styles.paddingTop);
         const paddingRight = parseFloat(styles.paddingRight);
         const paddingBottom = parseFloat(styles.paddingBottom);
-        const taskbarWidth = 374;
+        const taskbarWidth = 400;
         const taskbarHeight = 32;
         const boundaryOffset = 5;
 
@@ -424,7 +424,7 @@ const App: React.FC = () => {
         const paddingTop = parseFloat(styles.paddingTop);
         const paddingRight = parseFloat(styles.paddingRight);
         const paddingBottom = parseFloat(styles.paddingBottom);
-        const taskbarWidth = 375;
+        const taskbarWidth = 400;
         const taskbarHeight = 32;
         const boundaryOffset = 10;
 
@@ -798,96 +798,206 @@ const App: React.FC = () => {
                     style={{ position: 'relative', zIndex: 1 }}
                   />
                   {/* Draggable taskbar */}
-                  {token && !isTrashView && (
-                    <div
-                      ref={taskbarRef}
-                      style={{
-                        position: 'absolute',
-                        left: `${taskbarPosition.x}px`,
-                        top: `${taskbarPosition.y}px`,
-                        width: '374px',
-                        height: '32px',
-                        borderRadius: '15px',
-                        backgroundColor: '#252525',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.4)',
-                        zIndex: 10,
-                        pointerEvents: 'auto',
-                        userSelect: 'none',
-                        paddingLeft: '25px',
-                        gap: '15px',
-                      }}
-                      onMouseDown={handleMouseDown}
-                    >
-                      <img
-                        src={FirstCapIcon}
-                        alt="First Cap"
-                        style={{ width: '25px', height: '25px', pointerEvents: 'auto' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <img
-                        src={AllCapIcon}
-                        alt="All Cap"
-                        style={{ width: '25px', height: '25px', pointerEvents: 'auto' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <img
-                        src={BoldIcon}
-                        alt="Bold"
-                        style={{ width: '20px', height: '15px', pointerEvents: 'auto' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <img
-                        src={ItalicIcon}
-                        alt="Italic"
-                        style={{ width: '20px', height: '15px', pointerEvents: 'auto' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <img
-                        src={UnderlineIcon}
-                        alt="Underline"
-                        style={{ width: '25px', height: '15px', pointerEvents: 'auto' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <img
-                        src={StrikeThroughIcon}
-                        alt="Strike Through"
-                        style={{ width: '30px', height: '18px', pointerEvents: 'auto' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <img
-                        src={BulletPointsIcon}
-                        alt="Bullet Points"
-                        style={{ width: '18px', height: '18px', pointerEvents: 'auto'  }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <img
-                        src={ChecklistIcon}
-                        alt="Checklist"
-                        style={{ width: '18px', height: '18px', pointerEvents: 'auto' }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <select
-                        className="no-arrow"
-                        style={{
-                          width: '28px',
-                          height: '22px',
-                          backgroundColor: '#171717',
-                          borderRadius: '6px',
-                          pointerEvents: 'auto',
-                          color: '#FFFFFF',
-                          border: 'none',
-                          outline: 'none',
-                          cursor: 'pointer',
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
-                        {/* Empty dropdown; add options later as needed */}
-                      </select>
-                    </div>
-                  )}
+                  // ... (previous imports and code remain unchanged until the taskbar section)
+
+// Inside the return statement, replace the existing taskbar div with this:
+          {token && !isTrashView && (
+            <div
+              ref={taskbarRef}
+              style={{
+                position: 'absolute',
+                left: `${taskbarPosition.x}px`,
+                top: `${taskbarPosition.y}px`,
+                width: '400px',
+                height: '32px',
+                borderRadius: '15px',
+                backgroundColor: '#252525',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.4)',
+                zIndex: 10,
+                pointerEvents: 'auto',
+                userSelect: 'none',
+                padding: '0 25px',
+                gap: '10px',
+              }}
+              onMouseDown={handleMouseDown}
+            >
+              {/* Left Section: FirstCap, AllCap, Font Dropdown */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  style={{
+                    width: '27px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={FirstCapIcon}
+                    alt="First Cap"
+                    style={{ width: '27px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+                <button
+                  style={{
+                    width: '28px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={AllCapIcon}
+                    alt="All Cap"
+                    style={{ width: '28px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+                <select
+                  className="no-arrow"
+                  style={{
+                    width: '28px',
+                    height: '25px',
+                    backgroundColor: '#171717',
+                    borderRadius: '6px',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    marginLeft: '4px',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  {/* Empty dropdown; add options later as needed */}
+                </select>
+              </div>
+
+              {/* Separator 1 */}
+              <div style={{ width: '1px', height: '20px', backgroundColor: '#888', margin: '0 8px' }}></div>
+
+              {/* Middle Section: Bold, Italic, Underline, Strikethrough */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  style={{
+                    width: '19px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={BoldIcon}
+                    alt="Bold"
+                    style={{ width: '19px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+                <button
+                  style={{
+                    width: '18px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={ItalicIcon}
+                    alt="Italic"
+                    style={{ width: '18px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+                <button
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={UnderlineIcon}
+                    alt="Underline"
+                    style={{ width: '16px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+                <button
+                  style={{
+                    width: '36px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={StrikeThroughIcon}
+                    alt="Strike Through"
+                    style={{ width: '36px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+              </div>
+
+              {/* Separator 2 */}
+              <div style={{ width: '1px', height: '20px', backgroundColor: '#888', margin: '0 8px' }}></div>
+
+              {/* Right Section: Bullet Points, Checklist */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <button
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={BulletPointsIcon}
+                    alt="Bullet Points"
+                    style={{ width: '16px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+                <button
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <img
+                    src={ChecklistIcon}
+                    alt="Checklist"
+                    style={{ width: '16px', height: '16px', pointerEvents: 'none' }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+
+
                 </div>
               </div>
               {/* Right sidebar */}
